@@ -1,0 +1,197 @@
+{
+  "theme_and_archetype": {
+    "domain": "Construction & Field Operations (B2B SaaS)",
+    "archetype": "Swiss & High-Contrast (Archetype 4)",
+    "theme": "Light",
+    "aesthetic": "Linear meets Procore. Industrial, sharp-edged, monochromatic with strong typographic hierarchy. Utilitarian, function-first, professional.",
+    "language": "es-ES",
+    "icon_library": "@expo/vector-icons (Ionicons / MaterialCommunityIcons)",
+    "rules": [
+      "NEVER use emojis.",
+      "Use haptic feedback for all primary interactions (success, warning, error, heavy clicks).",
+      "Ensure safe-area awareness for all screens.",
+      "Use skeleton loading states for async data.",
+      "Use illustrated empty states with a clear CTA.",
+      "All interactive elements MUST include a `data-testid` attribute (kebab-case, role-based)."
+    ]
+  },
+  "colors": {
+    "brand": {
+      "primary": "#0A0A0A",
+      "background": "#F5F5F2",
+      "surface": "#FFFFFF",
+      "border": "#E5E5E5"
+    },
+    "semantic": {
+      "success": "#16A34A",
+      "success_bg": "#DCFCE7",
+      "warning": "#D97706",
+      "warning_bg": "#FEF3C7",
+      "danger": "#DC2626",
+      "danger_bg": "#FEE2E2",
+      "info": "#2563EB",
+      "info_bg": "#DBEAFE"
+    },
+    "text": {
+      "primary": "#0A0A0A",
+      "secondary": "#525252",
+      "tertiary": "#A3A3A3",
+      "inverse": "#FFFFFF"
+    }
+  },
+  "typography": {
+    "font_family": "System (SF Pro on iOS, Roboto on Android)",
+    "scale": {
+      "display": { "font_size": 32, "font_weight": "800", "line_height": 38, "letter_spacing": -0.5 },
+      "h1": { "font_size": 24, "font_weight": "700", "line_height": 32, "letter_spacing": -0.5 },
+      "h2": { "font_size": 20, "font_weight": "600", "line_height": 28, "letter_spacing": -0.3 },
+      "h3": { "font_size": 18, "font_weight": "600", "line_height": 24, "letter_spacing": -0.2 },
+      "body_large": { "font_size": 16, "font_weight": "400", "line_height": 24 },
+      "body": { "font_size": 14, "font_weight": "400", "line_height": 20 },
+      "body_medium": { "font_size": 14, "font_weight": "500", "line_height": 20 },
+      "caption": { "font_size": 12, "font_weight": "500", "line_height": 16, "letter_spacing": 0.5, "text_transform": "uppercase" }
+    }
+  },
+  "spacing": {
+    "scale": {
+      "xs": 4,
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 24,
+      "2xl": 32,
+      "3xl": 48
+    }
+  },
+  "component_specs": {
+    "buttons": {
+      "primary": { "background": "#0A0A0A", "text_color": "#FFFFFF", "border_radius": 4, "height": 48, "font_weight": "600" },
+      "secondary": { "background": "#FFFFFF", "text_color": "#0A0A0A", "border_color": "#E5E5E5", "border_width": 1, "border_radius": 4, "height": 48, "font_weight": "600" },
+      "ghost": { "background": "transparent", "text_color": "#525252", "border_radius": 4, "height": 48, "font_weight": "500" },
+      "fab": { "background": "#0A0A0A", "icon_color": "#FFFFFF", "border_radius": 28, "size": 56, "shadow": "0px 4px 12px rgba(0,0,0,0.15)", "position": "bottom-right" }
+    },
+    "cards": {
+      "default": { "background": "#FFFFFF", "border_color": "#E5E5E5", "border_width": 1, "border_radius": 4, "padding": 16, "shadow": "none" },
+      "kpi": { "background": "#FFFFFF", "border_color": "#E5E5E5", "border_width": 1, "border_radius": 4, "padding": 16, "layout": "column", "value_size": 24, "label_size": 12 }
+    },
+    "inputs": {
+      "text": { "background": "#FFFFFF", "border_color": "#E5E5E5", "border_width": 1, "border_radius": 4, "height": 48, "padding_horizontal": 16, "focus_border": "#0A0A0A" },
+      "stepper": { "layout": "row", "button_size": 40, "value_font_size": 18, "border_radius": 4, "border_color": "#E5E5E5" }
+    },
+    "badges": {
+      "status": {
+        "padding_vertical": 4,
+        "padding_horizontal": 8,
+        "border_radius": 2,
+        "font_size": 10,
+        "font_weight": "700",
+        "text_transform": "uppercase"
+      }
+    },
+    "tabs": {
+      "segmented_control": { "background": "#F5F5F2", "active_bg": "#FFFFFF", "border_radius": 4, "padding": 4, "height": 40 },
+      "bottom_navigator": { "background": "#FFFFFF", "border_top": "#E5E5E5", "active_color": "#0A0A0A", "inactive_color": "#A3A3A3", "height": 64 }
+    },
+    "lists": {
+      "row": { "padding": 16, "border_bottom": "#E5E5E5", "background": "#FFFFFF", "layout": "row_between" }
+    }
+  },
+  "navigation_patterns": {
+    "roles": ["WORKER", "MANAGER"],
+    "bottom_tabs": {
+      "WORKER": [
+        { "name": "Inicio", "icon": "home-outline" },
+        { "name": "Proyectos", "icon": "briefcase-outline" },
+        { "name": "Parte Diario", "icon": "clipboard-outline" },
+        { "name": "Historial", "icon": "time-outline" },
+        { "name": "Perfil", "icon": "person-outline" }
+      ],
+      "MANAGER": [
+        { "name": "Dashboard", "icon": "bar-chart-outline" },
+        { "name": "Proyectos", "icon": "briefcase-outline" },
+        { "name": "Equipo", "icon": "people-outline" },
+        { "name": "Reportes", "icon": "document-text-outline" },
+        { "name": "Ajustes", "icon": "settings-outline" }
+      ]
+    }
+  },
+  "screen_layouts": {
+    "Login": {
+      "layout": "Fullscreen background image with dark gradient overlay. Content bottom-aligned.",
+      "components": ["Logo (Text or SVG)", "Email Input", "Password Input", "Primary Button (Entrar)", "Biometric Ghost Button (FaceID/TouchID)"]
+    },
+    "WorkerHome": {
+      "layout": "Scrollable vertical list.",
+      "header": "Greeting + Date + Avatar",
+      "sections": [
+        { "title": "Proyectos de Hoy", "component": "Card list with status badges and location" },
+        { "title": "Acciones Rápidas", "component": "2-column grid of secondary buttons (Nuevo Parte, Escanear Material)" }
+      ]
+    },
+    "DailyLogForm": {
+      "layout": "Wizard or long scrolling form. High density.",
+      "header": "Sticky header with Project Name and Date",
+      "sections": [
+        { "title": "Horas Trabajadas", "component": "Stepper Input" },
+        { "title": "Clima", "component": "Row of selectable icons (Soleado, Lluvia, Viento)" },
+        { "title": "Progreso", "component": "Slider (0% - 100%)" },
+        { "title": "Materiales Utilizados", "component": "Searchable list with quantity stepper" },
+        { "title": "Evidencia Fotográfica", "component": "Camera grid overlay triggers. 3 slots minimum." }
+      ],
+      "floating_action": "Primary Button (Guardar Parte) pinned to bottom"
+    },
+    "ProjectDetail": {
+      "layout": "Header with project cover image + Top Segmented Tabs.",
+      "header": "Project Name, Address, Status Badge",
+      "tabs": ["Partes", "Fotos", "Materiales", "Balance", "Equipo"]
+    },
+    "ManagerDashboard": {
+      "layout": "Analytical grid layout.",
+      "header": "Global Overview",
+      "sections": [
+        { "title": "KPIs", "component": "2x2 grid of KPI Cards (Presupuesto, Avance, Horas, Alertas)" },
+        { "title": "Gasto vs Presupuesto", "component": "Bar Chart" },
+        { "title": "Alertas Críticas", "component": "List rows with Danger/Warning badges" }
+      ]
+    },
+    "AllProjects": {
+      "layout": "List view with Search and Filter bar fixed at top.",
+      "components": ["Search Input", "Filter Chips (Activos, Completados, Retrasados)", "Project List Rows (Image thumbnail, Title, Progress Bar, Status Badge)"],
+      "action": "FAB to Create Project (Manager only)"
+    }
+  },
+  "motion_and_interactions": {
+    "refresh": "Pull-to-refresh on all list views.",
+    "loading": "Skeleton loaders matching the shape of the incoming data (e.g., card shapes for projects).",
+    "haptics": {
+      "light": "Tab changes, stepper increments",
+      "medium": "Pull-to-refresh trigger, status change",
+      "heavy": "Form submit, destructive actions",
+      "success": "Task completion, saving log"
+    }
+  },
+  "media_urls": {
+    "login_background": {
+      "url": "https://images.unsplash.com/photo-1761227390482-bccb032eeea6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxnbGFzcyUyMGluc3RhbGxhdGlvbiUyMGNvbnN0cnVjdGlvbiUyMHNpdGV8ZW58MHx8fHwxNzc3MzAyMzQyfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Modern building under construction with unique window design. Use with dark overlay."
+    },
+    "project_covers": [
+      {
+        "url": "https://images.unsplash.com/photo-1777181922142-012fc9a7617c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxnbGFzcyUyMGluc3RhbGxhdGlvbiUyMGNvbnN0cnVjdGlvbiUyMHNpdGV8ZW58MHx8fHwxNzc3MzAyMzQyfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Construction workers on scaffolding installing glass facade."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1559354484-587384b2badc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwzfHxhbHVtaW51bSUyMGZhY2FkZSUyMGNvbnN0cnVjdGlvbnxlbnwwfHx8fDE3NzczMDIzNDJ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Corner of concrete high-rise building with glass."
+      },
+      {
+        "url": "https://images.pexels.com/photos/9300990/pexels-photo-9300990.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "A construction site with a tower crane and modern glass building facade."
+      }
+    ],
+    "empty_states": {
+      "url": "https://images.unsplash.com/photo-1616338968156-76ff58fa9197?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwyfHxhbHVtaW51bSUyMGZhY2FkZSUyMGNvbnN0cnVjdGlvbnxlbnwwfHx8fDE3NzczMDIzNDJ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Low angle photography of high rise building (use as a faded background or illustration basis for empty states)."
+    }
+  }
+}
