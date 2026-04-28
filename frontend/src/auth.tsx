@@ -36,6 +36,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const setUserExternal = (u: User | null) => setUser(u);
+
   useEffect(() => {
     (async () => {
       const t = await tokenStore.getAccess();
@@ -88,3 +90,5 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 }
+
+export const REGISTERED_FLAG_KEY = 'just_registered';

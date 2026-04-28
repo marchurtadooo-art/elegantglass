@@ -53,10 +53,21 @@ export default function Profile() {
         <Row icon="call-outline" label={user?.phone || 'Sin teléfono'} onPress={() => setShowProfile(true)} />
       </Card>
 
+      <View style={styles.privacy}>
+        <Ionicons name="shield-checkmark" size={20} color={COLORS.success} />
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={[TYPO.bodyMedium, { color: COLORS.success }]}>Sin acceso a datos financieros</Text>
+          <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }]}>
+            Como operario nunca verás presupuestos, costes ni precios. Tu privacidad y la confidencialidad de tu jefe están protegidas.
+          </Text>
+        </View>
+      </View>
+
       <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Datos</Text>
       <Card>
         <Row icon="cloud-download-outline" label={exporting ? 'Exportando...' : 'Exportar mis datos'} onPress={exportData} />
-        <Row icon="shield-checkmark-outline" label="Privacidad" onPress={() => Alert.alert('Privacidad', 'Tus datos están cifrados y se almacenan exclusivamente para la gestión de tu empresa.')} />
+        <Row icon="play-circle-outline" label="Ver tour de bienvenida" onPress={() => router.push('/onboarding')} />
+        <Row icon="shield-checkmark-outline" label="Privacidad" onPress={() => Alert.alert('Privacidad', 'Tus datos están cifrados y se almacenan exclusivamente para la gestión de tu empresa. Como operario nunca verás información económica.')} />
       </Card>
 
       <View style={{ marginTop: SPACING.xl }}>
@@ -113,4 +124,5 @@ const styles = StyleSheet.create({
   rolePill: { backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 2, alignSelf: 'flex-start' },
   rolePillText: { color: COLORS.textInverse, fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  privacy: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: COLORS.successBg, borderRadius: 4, padding: 12, marginTop: SPACING.md, borderLeftWidth: 3, borderLeftColor: COLORS.success },
 });

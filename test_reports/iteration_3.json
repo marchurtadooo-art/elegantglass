@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 3 — Backend 49/49 pytest pass (regression). Frontend onboarding + animations + worker privacy reinforcement validated end-to-end on mobile viewport (390x844). Admin & Worker first-time login redirect to /onboarding correctly, slide content matches spec, Saltar persists the flag and routes to role-based home, re-login skips onboarding (persistence works), worker UI confirmed €-free across Inicio / Mis obras / Project detail (Resumen/Partes/Fotos/Material — Balance & Equipo correctly absent), worker profile shows the GREEN 'Sin acceso a datos financieros' callout and 'Ver tour de bienvenida' row, manager Ajustes has the same tour row. ONE HIGH BUG: the 'Siguiente' button does not advance slides on web — clicking it 4× keeps the user on slide 0 (FlatList.scrollToIndex without getItemLayout is unreliable in react-native-web). Saltar works as workaround but the intended Siguiente→¡Empezar! flow with rocket icon never reaches the user via Siguiente.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "app/onboarding.tsx",
+        "issue": "FlatList 'Siguiente' button (testID=onboarding-next) does NOT advance slides on web. After clicking 4×, user remains on slide 0, the dot indicator stays on the first dot, button text never changes to '¡Empezar!', URL stays /onboarding. RCA: ref.current?.scrollToIndex({...}) without getItemLayout (or onScrollToIndexFailed) is unreliable in react-native-web. Fix: add getItemLayout={(_,i)=>({length:width, offset:width*i, index:i})} to the FlatList, OR replace with ScrollView and scrollTo({x:width*i}). Saltar (skip) works correctly so persistence + routing logic itself is OK — only the Next-slide swipe is broken.",
+        "testID": "onboarding-next",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": [
+        "Console warning (web only, non-blocking): 'Animated: useNativeDriver is not supported because the native animated module is missing. Falling back to JS-based animation.' This is expected behavior of react-native-web for Animated.timing(...,{useNativeDriver:true}). On native it will use the native driver. No action needed unless E1 wants to silence the warning by detecting Platform.OS==='web' and setting useNativeDriver:false.",
+        "Persistent deprecation warnings: 'shadow*' style props (use boxShadow), props.pointerEvents (use style.pointerEvents). Carry-over from previous iterations, non-blocking."
+      ]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_glasswork_backend.py",
+    "/app/backend/tests/test_iteration2_features.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX: Make onboarding 'Siguiente' actually advance slides. Add getItemLayout to the FlatList in app/onboarding.tsx OR migrate to ScrollView with scrollTo. Without this, the rocket-icon '¡Empezar!' final-slide CTA is unreachable via Siguiente on web (Saltar still works).",
+    "(Optional) Avoid useNativeDriver=true on web in src/animations.tsx to silence the recurring console warning."
+  ],
+  "critical_code_review_comments": [
+    "src/animations.tsx: empty dependency array in useEffect for FadeInUp is fine for one-shot mount animation, but `value` change in CountUp re-runs correctly thanks to dep [value, duration]. Good.",
+    "src/prefs.ts: localStorage access wrapped in try/catch — robust for SSR and private browsing. Key prefix gw_pref_ avoids collision. Correct.",
+    "app/onboarding.tsx: scrollToIndex without getItemLayout is the root-cause of the Siguiente bug. Also the SlideView re-renders heavily because each slide checks `active` and conditionally wraps in FadeInUp — this is fine but leads to a pop when index changes; consider always using FadeInUp keyed by active state.",
+    "app/index.tsx: gating with prefs.getBool is clean. Loading state shows ActivityIndicator while flag resolves. Good."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (49/49)", "frontend": "≈92% (1 HIGH bug: Siguiente doesn't advance, all other Iteration-3 flows pass)"},
+  "seed_data_creation": "No new seed data. Tests reused TEST_-prefixed materials from previous iteration.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "To re-test onboarding: open the public preview URL, run localStorage.clear() in DevTools, login as jefe@elegantglass.es / Admin1234! → expect redirect to /onboarding. After fix, clicking [data-testid=onboarding-next] should advance the page-dots and on the 4th slide the button becomes '¡Empezar!' with rocket icon and routing to /(manager)/dashboard. Persistence key in localStorage: gw_pref_onboarding_<userId>='1'. Same flow for carlos@elegantglass.es / Worker1234! → /(worker)/home. Backend BASE: https://site-glass-preview.preview.emergentagent.com (EXPO_PUBLIC_BACKEND_URL). Run: python -m pytest backend/tests/ -v",
+  "rca_of_issue": "Onboarding Siguiente bug — RCA: react-native-web's FlatList does not implement scrollToIndex deterministically without an explicit getItemLayout prop because it cannot measure off-screen items synchronously (RN Web logs the warning 'scrollToIndex should be used in conjunction with getItemLayout or onScrollToIndexFailed'). As a result ref.scrollToIndex({index:1, animated:true}) is silently ignored, the FlatList stays at offset 0, onScroll never fires with a new contentOffset.x, the index state never increments past 0, and goNext() perpetually triggers scrollToIndex(1) — never reaching slides.length-1 to call router.replace. Reproduction: clear localStorage, login, click Siguiente 4× — observe URL still /onboarding, dot indicator still on first dot. Mitigation in app/onboarding.tsx: add getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })} to the FlatList (single-line fix). Alternative: use ScrollView ref + scrollTo({ x: width*nextIndex, animated:true }) and detect end of momentum to call setIndex."
+}

@@ -58,6 +58,7 @@ export default function Settings() {
       <Card>
         <Row icon="person-outline" label="Editar perfil" onPress={() => setShowProfile(true)} />
         <Row icon="cloud-download-outline" label={exporting ? 'Exportando...' : 'Exportar datos (GDPR)'} onPress={exportData} />
+        <Row icon="play-circle-outline" label="Ver tour de bienvenida" onPress={() => router.push('/onboarding')} />
       </Card>
 
       <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Notificaciones</Text>

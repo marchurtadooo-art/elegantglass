@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Card, KpiCard, Skeleton, EmptyState, Avatar, SeverityBadge } from '../../src/ui';
+import { FadeInUp, Stagger, CountUp } from '../../src/animations';
 import { useAuth } from '../../src/auth';
 import { api } from '../../src/api';
 
@@ -53,19 +54,19 @@ export default function Dashboard() {
       ) : (
         <>
           <View style={[styles.kpiRow, { marginTop: SPACING.lg }]}>
-            <KpiCard testID="kpi-active" label="Obras activas" value={data.active_projects} icon="briefcase-outline" />
+            <FadeInUp delay={0} style={{ flex: 1 }}><KpiCard testID="kpi-active" label="Obras activas" value={data.active_projects} icon="briefcase-outline" /></FadeInUp>
             <View style={{ width: SPACING.md }} />
-            <KpiCard testID="kpi-workers" label="Operarios hoy" value={data.workers_today} icon="people-outline" />
+            <FadeInUp delay={80} style={{ flex: 1 }}><KpiCard testID="kpi-workers" label="Operarios hoy" value={data.workers_today} icon="people-outline" /></FadeInUp>
           </View>
           <View style={[styles.kpiRow, { marginTop: SPACING.md }]}>
-            <KpiCard testID="kpi-week" label="Gasto semana" value={fmtEur(data.week_spend)} icon="trending-up-outline" />
+            <FadeInUp delay={160} style={{ flex: 1 }}><KpiCard testID="kpi-week" label="Gasto semana" value={fmtEur(data.week_spend)} icon="trending-up-outline" /></FadeInUp>
             <View style={{ width: SPACING.md }} />
-            <KpiCard testID="kpi-month" label="Gasto mes" value={fmtEur(data.month_spend)} icon="cash-outline" />
+            <FadeInUp delay={240} style={{ flex: 1 }}><KpiCard testID="kpi-month" label="Gasto mes" value={fmtEur(data.month_spend)} icon="cash-outline" /></FadeInUp>
           </View>
           <View style={[styles.kpiRow, { marginTop: SPACING.md }]}>
-            <KpiCard testID="kpi-pending" label="Partes pendientes" value={data.pending_logs} icon="clipboard-outline" color={data.pending_logs > 0 ? COLORS.warning : undefined} />
+            <FadeInUp delay={320} style={{ flex: 1 }}><KpiCard testID="kpi-pending" label="Partes pendientes" value={data.pending_logs} icon="clipboard-outline" color={data.pending_logs > 0 ? COLORS.warning : undefined} /></FadeInUp>
             <View style={{ width: SPACING.md }} />
-            <KpiCard testID="kpi-alerts" label="Alertas abiertas" value={data.open_alerts} icon="alert-circle-outline" color={data.open_alerts > 0 ? COLORS.danger : undefined} />
+            <FadeInUp delay={400} style={{ flex: 1 }}><KpiCard testID="kpi-alerts" label="Alertas abiertas" value={data.open_alerts} icon="alert-circle-outline" color={data.open_alerts > 0 ? COLORS.danger : undefined} /></FadeInUp>
           </View>
 
           <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Gasto por obra (30d)</Text>

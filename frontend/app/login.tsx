@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, TYPO } from '../src/theme';
 import { Button, Input } from '../src/ui';
+import { FadeInUp } from '../src/animations';
 import { useAuth } from '../src/auth';
 
 const BG = 'https://images.unsplash.com/photo-1761227390482-bccb032eeea6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxnbGFzcyUyMGluc3RhbGxhdGlvbiUyMGNvbnN0cnVjdGlvbiUyMHNpdGV8ZW58MHx8fHwxNzc3MzAyMzQyfDA&ixlib=rb-4.1.0&q=85';
@@ -61,7 +62,8 @@ export default function Login() {
             <Text style={styles.brandSub}>Gestión de obras de aluminio y vidrio</Text>
           </View>
 
-          <View style={styles.card}>
+          <FadeInUp delay={150} distance={24}>
+            <View style={styles.card}>
             <Text style={[TYPO.h2, { marginBottom: SPACING.md }]}>Iniciar sesión</Text>
             <Input
               testID="login-email"
@@ -93,6 +95,7 @@ export default function Login() {
               </Text>
             </TouchableOpacity>
           </View>
+          </FadeInUp>
         </ScrollView>
       </KeyboardAvoidingView>
     </ImageBackground>
