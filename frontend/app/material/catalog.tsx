@@ -1,12 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, RefreshControl, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, FlatList, RefreshControl, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { COLORS, SPACING, TYPO, MAT_CATEGORIES } from '../../src/theme';
-import { Card, HeaderBar, Skeleton, EmptyState } from '../../src/ui';
-import { api } from '../../src/api';
+import { Button, Card, FAB, HeaderBar, Input, Skeleton, EmptyState } from '../../src/ui';
+import { api, apiError } from '../../src/api';
 import { useAuth } from '../../src/auth';
 
 export default function MaterialCatalog() {
@@ -18,6 +18,14 @@ export default function MaterialCatalog() {
   const [cat, setCat] = useState<string>('ALL');
   const [q, setQ] = useState('');
 
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newUnit, setNewUnit] = useState<'m2' | 'm' | 'ud' | 'kg' | 'l' | 'caja'>('ud');
+  const [newCat, setNewCat] = useState<string>('PERFILERIA');
+  const [newPrice, setNewPrice] = useState('');
+  const [newSupplier, setNewSupplier] = useState('');
+  const [saving, setSaving] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const r = await api.get('/materials' + (cat !== 'ALL' ? `?category=${cat}` : ''));
@@ -28,6 +36,16 @@ export default function MaterialCatalog() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const filtered = (data || []).filter((m) => m.name.toLowerCase().includes(q.toLowerCase()));
+
+  const submitNew = async () => {
+    if (!newName) { Alert.alert('Falta nombre', 'Introduce el nombre del material.'); return; }
+    setSaving(true);
+    try {
+      await api.post('/materials', { name: newName, unit: newUnit, category: newCat, unit_price: parseFloat(newPrice.replace(',', '.')) || 0, supplier: newSupplier });
+      setShowAdd(false); setNewName(''); setNewPrice(''); setNewSupplier(''); load();
+    } catch (e) { Alert.alert('Error', apiError(e)); }
+    finally { setSaving(false); }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
@@ -51,7 +69,7 @@ export default function MaterialCatalog() {
         <FlatList
           data={filtered}
           keyExtractor={(i) => i.id}
-          contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 32 }}
+          contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 100 }}
           ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           renderItem={({ item }) => (
@@ -65,6 +83,41 @@ export default function MaterialCatalog() {
           )}
         />
       )}
+
+      {!isWorker ? <FAB onPress={() => setShowAdd(true)} testID="add-material-fab" /> : null}
+
+      <Modal visible={showAdd} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAdd(false)}>
+        <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+            <TouchableOpacity onPress={() => setShowAdd(false)}><Ionicons name="close" size={26} /></TouchableOpacity>
+            <Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Nuevo material</Text>
+          </View>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <ScrollView contentContainerStyle={{ padding: SPACING.lg }} keyboardShouldPersistTaps="handled">
+              <Input label="Nombre" value={newName} onChangeText={setNewName} testID="new-mat-name" />
+              <Text style={[TYPO.caption, { marginBottom: 6 }]}>UNIDAD</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: SPACING.md }}>
+                {(['m2','m','ud','kg','l','caja'] as const).map((u) => (
+                  <TouchableOpacity key={u} onPress={() => setNewUnit(u)} style={[styles.uchip, newUnit === u && styles.uchipActive]}>
+                    <Text style={{ color: newUnit === u ? COLORS.surface : COLORS.textPrimary, fontWeight: '600' }}>{u}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={[TYPO.caption, { marginBottom: 6 }]}>CATEGORÍA</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: SPACING.md }}>
+                {MAT_CATEGORIES.map((c) => (
+                  <TouchableOpacity key={c.key} onPress={() => setNewCat(c.key)} style={[styles.uchip, newCat === c.key && styles.uchipActive]}>
+                    <Text style={{ color: newCat === c.key ? COLORS.surface : COLORS.textPrimary, fontWeight: '600' }}>{c.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Input label="Precio unitario (€)" value={newPrice} onChangeText={setNewPrice} keyboardType="decimal-pad" />
+              <Input label="Proveedor" value={newSupplier} onChangeText={setNewSupplier} />
+              <Button title="Crear material" loading={saving} onPress={submitNew} testID="submit-new-material" />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -82,4 +135,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: COLORS.surface, borderColor: COLORS.border, borderWidth: 1, borderRadius: 4 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  uchip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  uchipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
 });

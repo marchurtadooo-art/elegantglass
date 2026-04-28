@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 2 — Backend 49/49 pytest pass (31 regression + 18 new). Frontend mobile flows verified: forgot-password screen, settings (company/profile/GDPR rows), Reportes Ver PDF & Excel buttons (no más 'próxima versión'), material catalog FAB+modal for managers, photo activity feed renders thumbnails, role-separation enforced (worker has no FAB, no €).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Console deprecation warnings: 'shadow*' style props (use boxShadow); props.pointerEvents (use style.pointerEvents). Non-blocking."]}
+    ],
+    "react_native_issues": [
+      {"component": "expo packages", "issue": "expo-file-system@55.0.17 (expected ~19.0.22), expo-sharing@55.0.18 (expected ~14.0.8) — Expo doctor warns. Web preview works fine but native build may need pinning."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_glasswork_backend.py",
+    "/app/backend/tests/test_iteration2_features.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Pin expo-file-system and expo-sharing to versions matching installed Expo SDK (~19.0.22 / ~14.0.8) to silence doctor warnings and avoid native-build issues.",
+    "(Optional) Replace remaining shadow* style props with boxShadow and pointerEvents prop with style.pointerEvents to clear console deprecation noise."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1574 lines — strongly recommend splitting into routers (auth, projects, materials, logs, photos, reports, gdpr) before it becomes harder to maintain.",
+    "PDF & Excel generation is synchronous inside async endpoints — fine for current sizes but for >100 logs/entries should run in a thread pool (run_in_executor) to avoid blocking the event loop.",
+    "/api/auth/forgot-password logs the reset token to server logs only; UI must mention 'contact your admin' (already done). For production add an email service.",
+    "GDPR export correctly excludes image_base64 from photos_metadata and password_hash from users — verified via decoded JSON in test.",
+    "Reset-password issuance endpoint returns generic 'ok' for unknown emails — no enumeration. Good.",
+    "MongoDB _id stripped on every endpoint we tested. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration2_features.py"
+  ],
+  "success_rate": {"backend": "100% (49/49 after fixing test email TLD)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Tests created TEST_-prefixed material(s), one extra weekly report (POST /reports/weekly/generate), additional daily logs and a material entry. Profile/company PATCH overwrote demo values back to seed defaults. No destructive ops.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Frontend BASE URL = https://site-glass-preview.preview.emergentagent.com (EXPO_PUBLIC_BACKEND_URL). All Iteration-2 endpoints live: GET/PATCH /api/company, PATCH /api/profile, GET /api/gdpr/export, POST /api/auth/forgot-password, GET /api/reports/weekly/{rid}/{pdf|excel}. New file-download utility lives at /app/frontend/src/files.ts (web blob + expo-file-system fallback). Material catalog FAB testID = 'material-fab' (or 'add-material-fab'). Forgot-password route = /forgot-password. Run all tests: python -m pytest backend/tests/ -v. Note: Pydantic EmailStr requires real-looking TLDs (use example.com, NOT .test).",
+  "rca_of_issue": "Only one transient test failure: TestForgotPassword.test_unknown_email_same_response returned 422 because Pydantic v2 EmailStr rejected 'doesnotexist@nowhere.test' as it considers '.test' invalid. Fixed by using 'doesnotexist@example.com'. Endpoint behaves correctly (still returns generic ok=True message → no user enumeration). Backend code is OK; this was purely a test-data correction."
+}

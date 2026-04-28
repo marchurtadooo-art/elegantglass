@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Linking } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Linking, Image } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Button, Card, HeaderBar, ProgressBar, Segmented, Skeleton, StatusBadge, Avatar, EmptyState } from '../../src/ui';
+import { PhotoViewer } from '../../src/PhotoViewer';
 import { api, apiError } from '../../src/api';
 import { useAuth } from '../../src/auth';
 
@@ -195,22 +196,28 @@ function PartesTab({ logs, isWorker, onReview, onAdd }: any) {
 }
 
 function FotosTab({ photos, onAdd }: any) {
+  const [viewing, setViewing] = React.useState<any | null>(null);
   return (
     <View>
       <Button title="Subir foto" icon="camera-outline" onPress={onAdd} testID="add-photo" />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: SPACING.md, gap: 8 }}>
         {photos.length === 0 ? <Card style={{ flex: 1 }}><EmptyState icon="camera-outline" title="Sin fotos" /></Card>
           : photos.map((p: any) => (
-            <View key={p.id} style={{ width: '48%' }}>
-              <View style={{ aspectRatio: 1, backgroundColor: COLORS.background, borderRadius: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border }}>
-                <Ionicons name="image-outline" size={32} color={COLORS.textTertiary} />
-              </View>
+            <TouchableOpacity key={p.id} onPress={() => setViewing(p)} activeOpacity={0.85} style={{ width: '48%' }}>
+              {p.image_base64 ? (
+                <Image source={{ uri: p.image_base64 }} style={{ aspectRatio: 1, borderRadius: 4, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border }} resizeMode="cover" />
+              ) : (
+                <View style={{ aspectRatio: 1, backgroundColor: COLORS.background, borderRadius: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border }}>
+                  <Ionicons name="image-outline" size={32} color={COLORS.textTertiary} />
+                </View>
+              )}
               <Text style={[TYPO.body, { marginTop: 4 }]} numberOfLines={1}>{p.caption}</Text>
               <Text style={[TYPO.body, { color: COLORS.textTertiary, fontSize: 11 }]}>{p.photo_type}</Text>
-            </View>
+            </TouchableOpacity>
           ))
         }
       </View>
+      <PhotoViewer visible={!!viewing} photo={viewing} onClose={() => setViewing(null)} />
     </View>
   );
 }

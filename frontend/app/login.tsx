@@ -84,6 +84,9 @@ export default function Login() {
             <Button title="Entrar" onPress={submit} loading={loading} testID="login-submit" />
             <View style={{ height: SPACING.sm }} />
             <Button title="Acceso biométrico" variant="ghost" icon="finger-print-outline" onPress={biometric} testID="login-biometric" />
+            <TouchableOpacity onPress={() => router.push('/forgot-password')} style={{ marginTop: SPACING.md }} testID="goto-forgot">
+              <Text style={[TYPO.body, { textAlign: 'center', color: COLORS.textSecondary, textDecorationLine: 'underline' }]}>¿Olvidaste tu contraseña?</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push('/register')} style={{ marginTop: SPACING.lg }} testID="goto-register">
               <Text style={[TYPO.body, { textAlign: 'center', color: COLORS.textSecondary }]}>
                 ¿No tienes cuenta? <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>Crear empresa</Text>

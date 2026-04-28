@@ -189,6 +189,23 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    logo: Optional[str] = None  # base64
+
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
 class ProjectIn(BaseModel):
     name: str
     description: Optional[str] = ""
@@ -884,6 +901,347 @@ async def generate_weekly_report(user: dict = Depends(require_role("ADMIN", "MAN
     }
     await db.weekly_reports.insert_one(rep.copy())
     return serialize(rep)
+
+
+# =========================================================
+# Profile / Company / GDPR / Forgot password
+# =========================================================
+@api.patch("/profile")
+async def update_profile(body: ProfileUpdate, user: dict = Depends(get_current_user)):
+    upd = {k: v for k, v in body.dict().items() if v is not None}
+    if upd:
+        upd["updated_at"] = now_utc()
+        await db.users.update_one({"id": user["id"]}, {"$set": upd})
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return serialize(u)
+
+
+@api.get("/company")
+async def get_company(user: dict = Depends(get_current_user)):
+    c = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0})
+    return serialize(c) if c else {}
+
+
+@api.patch("/company")
+async def update_company(body: CompanyUpdate, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+    upd = {k: v for k, v in body.dict().items() if v is not None}
+    if upd:
+        await db.companies.update_one({"id": user["company_id"]}, {"$set": upd})
+    c = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0})
+    return serialize(c)
+
+
+@api.get("/gdpr/export")
+async def gdpr_export(user: dict = Depends(get_current_user)):
+    """Export all data for the user's company as JSON."""
+    cid = user["company_id"]
+    company = await db.companies.find_one({"id": cid}, {"_id": 0})
+    users = await db.users.find({"company_id": cid}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    projects = await db.projects.find({"company_id": cid}, {"_id": 0}).to_list(1000)
+    materials = await db.materials.find({"company_id": cid}, {"_id": 0}).to_list(2000)
+    entries = await db.material_entries.find({"company_id": cid}, {"_id": 0}).to_list(5000)
+    logs = await db.daily_logs.find({"company_id": cid}, {"_id": 0}).to_list(5000)
+    photos = await db.project_photos.find(
+        {"company_id": cid}, {"_id": 0, "image_base64": 0}  # exclude heavy field
+    ).to_list(5000)
+    alerts = await db.alerts.find({"company_id": cid}, {"_id": 0}).to_list(1000)
+    payload = {
+        "exported_at": iso(now_utc()),
+        "company": serialize(company),
+        "users": [serialize(u) for u in users],
+        "projects": [serialize(p) for p in projects],
+        "materials": [serialize(m) for m in materials],
+        "material_entries": [serialize(e) for e in entries],
+        "daily_logs": [serialize(l) for l in logs],
+        "photos_metadata": [serialize(p) for p in photos],
+        "alerts": [serialize(a) for a in alerts],
+    }
+    import json as _json, base64 as _b64
+    raw = _json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    return {
+        "filename": f"glasswork_export_{now_utc().strftime('%Y%m%d_%H%M%S')}.json",
+        "mime": "application/json",
+        "base64": _b64.b64encode(raw).decode("ascii"),
+    }
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordIn):
+    """Without email service: log a token to backend logs and return a generic message.
+    Admin must contact user manually to share token. (No external email API used.)"""
+    import secrets
+    user = await db.users.find_one({"email": body.email.lower().strip()})
+    # always return success to prevent enumeration
+    if user:
+        token = secrets.token_urlsafe(24)
+        await db.password_reset_tokens.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "token": token,
+            "expires_at": now_utc() + timedelta(hours=1),
+            "used": False,
+            "created_at": now_utc(),
+        })
+        logger.info(f"PASSWORD_RESET_TOKEN for {body.email}: {token}")
+    return {"ok": True, "message": "Si el email existe, recibirás instrucciones por parte de tu administrador."}
+
+
+# =========================================================
+# Real PDF & Excel report generation
+# =========================================================
+def _build_pdf_bytes(company_name: str, summary: dict, week_start: datetime, week_end: datetime,
+                    projects: list, logs: list, entries: list) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from io import BytesIO
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
+                            topMargin=18 * mm, bottomMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("title", parent=styles["Title"], fontSize=24, leading=28, textColor=colors.HexColor("#0A0A0A"))
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=14, textColor=colors.HexColor("#0A0A0A"))
+    body = styles["BodyText"]
+    cap = ParagraphStyle("cap", parent=body, fontSize=9, textColor=colors.HexColor("#525252"))
+
+    story = []
+    story.append(Paragraph(f"GLASSWORK", title))
+    story.append(Paragraph(company_name, h2))
+    story.append(Paragraph(f"Reporte semanal · {week_start.strftime('%d/%m/%Y')} – {week_end.strftime('%d/%m/%Y')}", cap))
+    story.append(Spacer(1, 16))
+
+    # KPIs
+    story.append(Paragraph("Resumen ejecutivo", h2))
+    kpi_data = [
+        ["Gasto total", f"€{summary.get('total_spend', 0):,.2f}"],
+        ["Partes registrados", str(summary.get('log_count', 0))],
+        ["Fotos subidas", str(summary.get('photo_count', 0))],
+        ["Incidentes", str(summary.get('incident_count', 0))],
+    ]
+    t = Table(kpi_data, colWidths=[80 * mm, 80 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F5F2")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#0A0A0A")),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E5E5")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E5E5E5")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 14))
+
+    # Project breakdown
+    story.append(Paragraph("Obras", h2))
+    if projects:
+        rows = [["Obra", "Estado", "Avance", "Presupuesto", "Gastado"]]
+        for p in projects:
+            rows.append([
+                p.get("name", "—")[:38],
+                p.get("status", "—"),
+                f"{p.get('progress_percentage', 0)}%",
+                f"€{p.get('budget', 0):,.0f}",
+                f"€{p.get('spent', 0):,.0f}",
+            ])
+        pt = Table(rows, colWidths=[60 * mm, 24 * mm, 18 * mm, 30 * mm, 28 * mm])
+        pt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0A0A0A")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (1, 1), (-1, -1), "LEFT"),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E5E5")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E5E5E5")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFAF8")]),
+        ]))
+        story.append(pt)
+    else:
+        story.append(Paragraph("Sin obras registradas en el período.", body))
+    story.append(Spacer(1, 14))
+
+    # Logs
+    story.append(Paragraph("Partes diarios", h2))
+    if logs:
+        rows = [["Fecha", "Operario", "Obra", "Horas", "Estado"]]
+        for l in logs[:30]:
+            d = l.get("date", "")
+            try:
+                d_fmt = datetime.fromisoformat(d.replace("Z", "+00:00")).strftime("%d/%m/%Y") if d else "—"
+            except Exception:
+                d_fmt = d[:10] if d else "—"
+            rows.append([
+                d_fmt,
+                (l.get("worker_name") or "—")[:24],
+                (l.get("project_name") or "—")[:30],
+                f"{l.get('hours_worked', 0)}h",
+                l.get("status", "—"),
+            ])
+        lt = Table(rows, colWidths=[24 * mm, 36 * mm, 50 * mm, 18 * mm, 24 * mm])
+        lt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0A0A0A")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E5E5")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E5E5E5")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFAF8")]),
+        ]))
+        story.append(lt)
+    else:
+        story.append(Paragraph("Sin partes registrados.", body))
+
+    story.append(Spacer(1, 14))
+    story.append(Paragraph("Materiales", h2))
+    if entries:
+        cat_totals: dict = {}
+        for e in entries:
+            cat = (e.get("material") or {}).get("category", "OTROS")
+            cat_totals[cat] = cat_totals.get(cat, 0) + (e.get("total_cost") or 0)
+        rows = [["Categoría", "Total"]] + [[k, f"€{v:,.2f}"] for k, v in sorted(cat_totals.items(), key=lambda x: -x[1])]
+        ct = Table(rows, colWidths=[60 * mm, 60 * mm])
+        ct.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0A0A0A")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E5E5")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E5E5E5")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(ct)
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+def _build_excel_bytes(summary: dict, projects: list, logs: list, entries: list) -> bytes:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Resumen"
+    ws.append(["Métrica", "Valor"])
+    for k, v in [
+        ("Gasto total (€)", summary.get("total_spend", 0)),
+        ("Partes", summary.get("log_count", 0)),
+        ("Fotos", summary.get("photo_count", 0)),
+        ("Incidentes", summary.get("incident_count", 0)),
+    ]:
+        ws.append([k, v])
+    ws["A1"].font = Font(bold=True, color="FFFFFF")
+    ws["B1"].font = Font(bold=True, color="FFFFFF")
+    ws["A1"].fill = ws["B1"].fill = PatternFill("solid", fgColor="0A0A0A")
+
+    ws2 = wb.create_sheet("Obras")
+    ws2.append(["Obra", "Estado", "Avance %", "Presupuesto", "Gastado", "Cliente"])
+    for p in projects:
+        ws2.append([p.get("name"), p.get("status"), p.get("progress_percentage", 0),
+                    p.get("budget", 0), p.get("spent", 0), p.get("client_name", "")])
+    for c in ws2[1]: c.font = Font(bold=True, color="FFFFFF"); c.fill = PatternFill("solid", fgColor="0A0A0A")
+
+    ws3 = wb.create_sheet("Partes")
+    ws3.append(["Fecha", "Operario", "Obra", "Horas", "Estado", "Descripción"])
+    for l in logs:
+        d = l.get("date", "")
+        try:
+            d_fmt = datetime.fromisoformat(d.replace("Z", "+00:00")).strftime("%Y-%m-%d") if d else ""
+        except Exception:
+            d_fmt = d[:10] if d else ""
+        ws3.append([d_fmt, l.get("worker_name", ""), l.get("project_name", ""),
+                    l.get("hours_worked", 0), l.get("status", ""), l.get("work_description", "")[:200]])
+    for c in ws3[1]: c.font = Font(bold=True, color="FFFFFF"); c.fill = PatternFill("solid", fgColor="0A0A0A")
+
+    ws4 = wb.create_sheet("Materiales")
+    ws4.append(["Material", "Categoría", "Cantidad", "Unidad", "Precio", "Total", "Tipo", "Operario"])
+    for e in entries:
+        m = e.get("material") or {}
+        ws4.append([m.get("name", ""), m.get("category", ""), e.get("quantity", 0),
+                    m.get("unit", ""), e.get("unit_price", 0), e.get("total_cost", 0),
+                    e.get("type", ""), e.get("worker_name", "")])
+    for c in ws4[1]: c.font = Font(bold=True, color="FFFFFF"); c.fill = PatternFill("solid", fgColor="0A0A0A")
+
+    for s in [ws, ws2, ws3, ws4]:
+        for col in s.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=10)
+            s.column_dimensions[col[0].column_letter].width = min(40, max_len + 2)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+async def _gather_report_data(cid: str, week_start: datetime, week_end: datetime):
+    projects = await db.projects.find({"company_id": cid}, {"_id": 0}).to_list(500)
+    # add spent
+    for p in projects:
+        pipe = [{"$match": {"project_id": p["id"]}}, {"$group": {"_id": None, "s": {"$sum": "$total_cost"}}}]
+        r = await db.material_entries.aggregate(pipe).to_list(1)
+        p["spent"] = round(r[0]["s"], 2) if r else 0
+    logs = await db.daily_logs.find(
+        {"company_id": cid, "submitted_at": {"$gte": week_start, "$lte": week_end}}, {"_id": 0}
+    ).sort("submitted_at", -1).to_list(500)
+    for l in logs:
+        w = await db.users.find_one({"id": l["worker_id"]}, {"_id": 0, "name": 1})
+        proj = await db.projects.find_one({"id": l["project_id"]}, {"_id": 0, "name": 1})
+        l["worker_name"] = (w or {}).get("name")
+        l["project_name"] = (proj or {}).get("name")
+    entries = await db.material_entries.find(
+        {"company_id": cid, "created_at": {"$gte": week_start, "$lte": week_end}}, {"_id": 0}
+    ).to_list(2000)
+    for e in entries:
+        m = await db.materials.find_one({"id": e["material_id"]}, {"_id": 0})
+        e["material"] = serialize(m) if m else None
+        w = await db.users.find_one({"id": e["worker_id"]}, {"_id": 0, "name": 1})
+        e["worker_name"] = (w or {}).get("name")
+    return projects, logs, entries
+
+
+@api.get("/reports/weekly/{rid}/pdf")
+async def report_pdf(rid: str, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+    rep = await db.weekly_reports.find_one({"id": rid, "company_id": user["company_id"]})
+    if not rep: raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    company = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0})
+    ws = rep["week_start"] if isinstance(rep["week_start"], datetime) else datetime.fromisoformat(rep["week_start"])
+    we = rep["week_end"] if isinstance(rep["week_end"], datetime) else datetime.fromisoformat(rep["week_end"])
+    if ws.tzinfo is None: ws = ws.replace(tzinfo=timezone.utc)
+    if we.tzinfo is None: we = we.replace(tzinfo=timezone.utc)
+    projects, logs, entries = await _gather_report_data(user["company_id"], ws, we)
+    pdf = _build_pdf_bytes(company.get("name", "Empresa"), rep.get("summary") or {}, ws, we, projects, logs, entries)
+    import base64 as _b64
+    return {
+        "filename": f"glasswork_reporte_{ws.strftime('%Y%m%d')}.pdf",
+        "mime": "application/pdf",
+        "base64": _b64.b64encode(pdf).decode("ascii"),
+    }
+
+
+@api.get("/reports/weekly/{rid}/excel")
+async def report_excel(rid: str, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+    rep = await db.weekly_reports.find_one({"id": rid, "company_id": user["company_id"]})
+    if not rep: raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    ws = rep["week_start"] if isinstance(rep["week_start"], datetime) else datetime.fromisoformat(rep["week_start"])
+    we = rep["week_end"] if isinstance(rep["week_end"], datetime) else datetime.fromisoformat(rep["week_end"])
+    if ws.tzinfo is None: ws = ws.replace(tzinfo=timezone.utc)
+    if we.tzinfo is None: we = we.replace(tzinfo=timezone.utc)
+    projects, logs, entries = await _gather_report_data(user["company_id"], ws, we)
+    xls = _build_excel_bytes(rep.get("summary") or {}, projects, logs, entries)
+    import base64 as _b64
+    return {
+        "filename": f"glasswork_reporte_{ws.strftime('%Y%m%d')}.xlsx",
+        "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "base64": _b64.b64encode(xls).decode("ascii"),
+    }
 
 
 # =========================================================

@@ -54,16 +54,23 @@
       "expo-web-browser",
       [
         "expo-camera",
-        { "cameraPermission": "Para capturar evidencia fotográfica de la obra." }
+        {
+          "cameraPermission": "Para capturar evidencia fotográfica de la obra."
+        }
       ],
       [
         "expo-image-picker",
-        { "photosPermission": "Para adjuntar fotos del trabajo realizado." }
+        {
+          "photosPermission": "Para adjuntar fotos del trabajo realizado."
+        }
       ],
       [
         "expo-local-authentication",
-        { "faceIDPermission": "Para acceso rápido y seguro a tu cuenta." }
-      ]
+        {
+          "faceIDPermission": "Para acceso rápido y seguro a tu cuenta."
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

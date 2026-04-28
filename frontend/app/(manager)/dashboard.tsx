@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Image } from 'react-native';import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
@@ -89,21 +88,23 @@ export default function Dashboard() {
           )}
 
           <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Actividad fotográfica de hoy</Text>
-          {data.photo_feed.length === 0 ? (
-            <Card><EmptyState icon="camera-outline" title="Sin fotos hoy" /></Card>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-              {data.photo_feed.map((p: any) => (
-                <View key={p.id} style={styles.photoTile}>
-                  <View style={styles.photoImg}>
-                    <Ionicons name="image-outline" size={28} color={COLORS.textTertiary} />
-                  </View>
-                  <Text style={[TYPO.bodyMedium, { marginTop: 6 }]} numberOfLines={1}>{p.worker_name}</Text>
-                  <Text style={[TYPO.body, { color: COLORS.textSecondary }]} numberOfLines={1}>{p.project_name}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          )}
+              {data.photo_feed.length === 0 ? (
+                <Card><EmptyState icon="camera-outline" title="Sin fotos hoy" /></Card>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                  {data.photo_feed.map((p: any) => (
+                    <View key={p.id} style={styles.photoTile}>
+                      {p.image_base64 ? (
+                        <Image source={{ uri: p.image_base64 }} style={styles.photoImg} resizeMode="cover" />
+                      ) : (
+                        <View style={styles.photoImg}><Ionicons name="image-outline" size={28} color={COLORS.textTertiary} /></View>
+                      )}
+                      <Text style={[TYPO.bodyMedium, { marginTop: 6 }]} numberOfLines={1}>{p.worker_name}</Text>
+                      <Text style={[TYPO.body, { color: COLORS.textSecondary }]} numberOfLines={1}>{p.project_name}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
 
           <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Alertas recientes</Text>
           {alerts.length === 0 ? (

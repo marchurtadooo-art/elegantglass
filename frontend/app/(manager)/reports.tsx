@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Button, Card, Skeleton, EmptyState } from '../../src/ui';
 import { api, apiError } from '../../src/api';
+import { downloadBase64File } from '../../src/files';
 
 export default function Reports() {
   const insets = useSafeAreaInsets();
@@ -79,8 +80,14 @@ export default function Reports() {
                 <Stat label="Incidentes" value={item.summary?.incident_count || 0} />
               </View>
               <View style={{ flexDirection: 'row', marginTop: SPACING.md, gap: 8 }}>
-                <View style={{ flex: 1 }}><Button title="Ver PDF" variant="secondary" icon="document-outline" onPress={() => Alert.alert('PDF', 'Disponible en próxima versión.')} /></View>
-                <View style={{ flex: 1 }}><Button title="Excel" variant="secondary" icon="grid-outline" onPress={() => Alert.alert('Excel', 'Disponible en próxima versión.')} /></View>
+                <View style={{ flex: 1 }}><Button title="Ver PDF" variant="secondary" icon="document-outline" onPress={async () => {
+                  try { const r = await api.get(`/reports/weekly/${item.id}/pdf`); await downloadBase64File(r.data); }
+                  catch (e) { Alert.alert('Error', apiError(e)); }
+                }} /></View>
+                <View style={{ flex: 1 }}><Button title="Excel" variant="secondary" icon="grid-outline" onPress={async () => {
+                  try { const r = await api.get(`/reports/weekly/${item.id}/excel`); await downloadBase64File(r.data); }
+                  catch (e) { Alert.alert('Error', apiError(e)); }
+                }} /></View>
               </View>
             </Card>
           )}
