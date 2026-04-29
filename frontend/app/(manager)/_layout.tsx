@@ -1,8 +1,10 @@
 import React from 'react';
+import { View } from 'react-native';
 import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/auth';
 import { COLORS } from '../../src/theme';
+import QrFab from '../../src/QrFab';
 
 export default function ManagerTabs() {
   const { user } = useAuth();
@@ -10,6 +12,7 @@ export default function ManagerTabs() {
   if (!user) return <Redirect href="/login" />;
   if (user.role === 'WORKER') return <Redirect href="/(worker)/home" />;
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -26,5 +29,7 @@ export default function ManagerTabs() {
       <Tabs.Screen name="reports" options={{ title: 'Reportes', tabBarIcon: ({ color, size }) => <Ionicons name="document-text-outline" color={color} size={size} /> }} />
       <Tabs.Screen name="settings" options={{ title: 'Ajustes', tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" color={color} size={size} /> }} />
     </Tabs>
+    <QrFab />
+    </View>
   );
 }
