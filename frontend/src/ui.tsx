@@ -1,11 +1,20 @@
 import React from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, ActivityIndicator,
-  StyleSheet, ViewStyle, TextStyle, StyleProp, Pressable, Animated, Easing,
+  StyleSheet, ViewStyle, TextStyle, StyleProp, Pressable, Animated, Easing, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { COLORS, RADIUS, SPACING, STATUS_COLORS, SEVERITY_COLORS, TYPO } from './theme';
+
+const safeHaptic = (style: any) => {
+  if (Platform.OS === 'web') return;
+  try { Haptics.impactAsync(style).catch(() => {}); } catch {}
+};
+const safeSelection = () => {
+  if (Platform.OS === 'web') return;
+  try { Haptics.selectionAsync().catch(() => {}); } catch {}
+};
 
 // ---------- Button ----------
 type ButtonProps = {
@@ -34,7 +43,7 @@ export function Button({
       testID={testID}
       activeOpacity={0.85}
       onPress={() => {
-        if (haptic) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        if (haptic) safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
         onPress?.();
       }}
       disabled={disabled || loading}
@@ -218,7 +227,7 @@ export function Segmented<T extends string>({
           <Pressable
             key={o.key}
             onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
+              safeSelection();
               onChange(o.key);
             }}
             style={[styles.segItem, active && styles.segItemActive]}
@@ -238,7 +247,7 @@ export function FAB({ onPress, icon = 'add', testID }: { onPress: () => void; ic
       testID={testID}
       activeOpacity={0.8}
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
         onPress();
       }}
       style={styles.fab}

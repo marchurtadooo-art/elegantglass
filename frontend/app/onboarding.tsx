@@ -75,7 +75,9 @@ export default function Onboarding() {
 
   const goNext = async () => {
     if (index < slides.length - 1) {
-      ref.current?.scrollToIndex({ index: index + 1, animated: true });
+      const next = index + 1;
+      setIndex(next);
+      ref.current?.scrollToOffset({ offset: next * width, animated: true });
     } else {
       if (user?.id) await prefs.setBool(`onboarding_${user.id}`, true);
       if (isWorker) router.replace('/(worker)/home');
@@ -109,6 +111,7 @@ export default function Onboarding() {
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
+        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         renderItem={({ item, index: i }) => <SlideView slide={item} active={i === index} />}
       />
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
