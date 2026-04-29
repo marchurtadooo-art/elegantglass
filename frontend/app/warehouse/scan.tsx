@@ -77,16 +77,17 @@ export default function ScanScreen() {
               </View>
             </View>
           ) : (
-            <CameraView
-              style={{ flex: 1 }}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={({ data }) => handleCode(data)}
-            >
-              <View style={styles.overlay}>
+            <View style={{ flex: 1 }}>
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={({ data }) => handleCode(data)}
+              />
+              <View style={styles.overlay} pointerEvents="none">
                 <View style={styles.frame} />
                 <Text style={styles.hint}>Apunta al QR del lote o de la zona</Text>
               </View>
-            </CameraView>
+            </View>
           )}
         </>
       )}

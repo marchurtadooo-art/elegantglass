@@ -6,9 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPO, MAT_CATEGORIES } from '../../src/theme';
 import { Button, Card, HeaderBar, Input, Skeleton, EmptyState, FAB } from '../../src/ui';
 import { api, apiError } from '../../src/api';
+import { downloadBase64File } from '../../src/files';
 import { useAuth } from '../../src/auth';
-
-const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function Zones() {
   const insets = useSafeAreaInsets();
@@ -18,7 +17,7 @@ export default function Zones() {
   const [zones, setZones] = useState<any[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [showQr, setShowQr] = useState<{ zone: any; b64?: string } | null>(null);
+  const [showQr, setShowQr] = useState<{ zone: any; b64?: string; payload?: any } | null>(null);
   const [name, setName] = useState('');
   const [cat, setCat] = useState<string>('PERFILERIA');
   const [rows, setRows] = useState('10');
@@ -41,10 +40,20 @@ export default function Zones() {
   };
 
   const showZoneQr = async (zone: any) => {
+    setShowQr({ zone });
     try {
-      // Fetch as base64 via blob → b64 (web) or just URL (native Image)
-      setShowQr({ zone });
-    } catch {}
+      const r = await api.get(`/warehouse/zones/${zone.id}/qr-base64`);
+      setShowQr({ zone, b64: r.data.base64, payload: r.data });
+    } catch (e) {
+      Alert.alert('Error', apiError(e));
+      setShowQr(null);
+    }
+  };
+
+  const downloadZoneQr = async () => {
+    if (!showQr?.payload) return;
+    try { await downloadBase64File(showQr.payload); }
+    catch (e) { Alert.alert('Error', apiError(e)); }
   };
 
   return (
@@ -104,9 +113,19 @@ export default function Zones() {
                 <Text style={[TYPO.body, { color: COLORS.textSecondary, textAlign: 'center', marginBottom: SPACING.lg }]}>
                   Imprime este QR y pégalo en la zona física del almacén. Los operarios escanearán el lote y luego este QR para ubicarlo automáticamente.
                 </Text>
-                <Image source={{ uri: `${BACKEND}/api/warehouse/zones/${showQr.zone.id}/qr.png` }} style={{ width: 280, height: 280, backgroundColor: COLORS.surface }} resizeMode="contain" />
+                {showQr.b64 ? (
+                  <Image source={{ uri: `data:image/png;base64,${showQr.b64}` }} style={{ width: 280, height: 280, backgroundColor: COLORS.surface }} resizeMode="contain" />
+                ) : (
+                  <View style={{ width: 280, height: 280, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' }}>
+                    <Skeleton height={240} />
+                  </View>
+                )}
                 <Text style={[TYPO.h3, { marginTop: SPACING.md }]}>{showQr.zone.name}</Text>
                 <Text style={[TYPO.body, { color: COLORS.textTertiary, fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }) }]}>{showQr.zone.qr_code}</Text>
+                <View style={{ height: SPACING.lg }} />
+                {showQr.b64 ? (
+                  <Button title="Descargar PNG" variant="secondary" icon="download-outline" onPress={downloadZoneQr} />
+                ) : null}
               </>
             ) : null}
           </ScrollView>

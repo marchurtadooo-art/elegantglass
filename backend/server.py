@@ -1338,6 +1338,23 @@ async def warehouse_zone_qr(zid: str, user: dict = Depends(get_current_user)):
     return Response(content=buf.getvalue(), media_type="image/png")
 
 
+@api.get("/warehouse/zones/{zid}/qr-base64")
+async def warehouse_zone_qr_b64(zid: str, user: dict = Depends(get_current_user)):
+    """Return zone QR code as base64 PNG (works with auth in mobile/web)."""
+    z = await db.storage_zones.find_one({"id": zid, "company_id": user["company_id"]})
+    if not z: raise HTTPException(status_code=404, detail="Zona no encontrada")
+    import qrcode, base64
+    from io import BytesIO
+    img = qrcode.make(z["qr_code"], box_size=10, border=2)
+    buf = BytesIO(); img.save(buf, format="PNG")
+    return {
+        "filename": f"zone-{z.get('name', zid).replace(' ', '_')}.png",
+        "mime": "image/png",
+        "base64": base64.b64encode(buf.getvalue()).decode("ascii"),
+        "qr_code": z["qr_code"],
+    }
+
+
 @api.post("/warehouse/lots")
 async def warehouse_create_lot(body: LotCreateIn, user: dict = Depends(get_current_user)):
     mat = await db.materials.find_one({"id": body.material_id, "company_id": user["company_id"]})

@@ -13,7 +13,7 @@ import { Button, Input } from '../src/ui';
 import { FadeInUp } from '../src/animations';
 import { useAuth } from '../src/auth';
 
-const BG = 'https://images.unsplash.com/photo-1761227390482-bccb032eeea6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxnbGFzcyUyMGluc3RhbGxhdGlvbiUyMGNvbnN0cnVjdGlvbiUyMHNpdGV8ZW58MHx8fHwxNzc3MzAyMzQyfDA&ixlib=rb-4.1.0&q=85';
+const BG = 'https://customer-assets.emergentagent.com/job_site-glass-preview/artifacts/tbs4sa2u_image.png';
 
 export default function Login() {
   const insets = useSafeAreaInsets();
@@ -104,7 +104,7 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1, backgroundColor: COLORS.primary },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10,10,10,0.55)' },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10,10,10,0.35)' },
   container: { flexGrow: 1, padding: SPACING.lg, justifyContent: 'space-between' },
   brand: { alignItems: 'center', marginTop: SPACING.xxl },
   logo: {
