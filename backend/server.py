@@ -1245,6 +1245,512 @@ async def report_excel(rid: str, user: dict = Depends(require_role("ADMIN", "MAN
 
 
 # =========================================================
+# WAREHOUSE — lots, zones, movements, label printing
+# =========================================================
+LotStatus = Literal["IN_STOCK", "PARTIAL", "DEPLETED"]
+MovementType = Literal["INBOUND", "OUTBOUND", "LOCATE", "ADJUST", "RETURN"]
+
+
+class StorageZoneIn(BaseModel):
+    name: str
+    category: MatCategory
+    row_count: int = 10
+
+
+class LotCreateIn(BaseModel):
+    material_id: str
+    quantity: float
+    supplier_name: Optional[str] = ""
+    unit_price: Optional[float] = None
+    notes: Optional[str] = ""
+
+
+class LocateIn(BaseModel):
+    zone_id: str
+    row_label: Optional[str] = ""
+
+
+class OutboundIn(BaseModel):
+    quantity: float
+    project_id: str
+    note: Optional[str] = ""
+
+
+class AdjustIn(BaseModel):
+    quantity: float  # can be negative
+    note: str = ""
+
+
+async def _next_lot_code() -> str:
+    year = now_utc().year
+    prefix = f"EG-{year}-"
+    last = await db.material_lots.find({"lot_code": {"$regex": f"^{prefix}"}}).sort("lot_code", -1).limit(1).to_list(1)
+    if not last:
+        n = 1
+    else:
+        try: n = int(last[0]["lot_code"].split("-")[-1]) + 1
+        except Exception: n = 1
+    return f"{prefix}{n:04d}"
+
+
+def _lot_status(qty_left: float, qty_total: float) -> str:
+    if qty_left <= 0: return "DEPLETED"
+    if qty_left < qty_total: return "PARTIAL"
+    return "IN_STOCK"
+
+
+@api.post("/warehouse/zones")
+async def warehouse_create_zone(body: StorageZoneIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+    zid = str(uuid.uuid4())
+    z = {
+        "id": zid,
+        "company_id": user["company_id"],
+        "name": body.name,
+        "category": body.category,
+        "row_count": body.row_count,
+        "qr_code": f"ZONE-{zid}",
+        "created_at": now_utc(),
+    }
+    await db.storage_zones.insert_one(z.copy())
+    return serialize(z)
+
+
+@api.get("/warehouse/zones")
+async def warehouse_list_zones(user: dict = Depends(get_current_user)):
+    zones = await db.storage_zones.find({"company_id": user["company_id"]}).sort("name", 1).to_list(200)
+    out = []
+    for z in zones:
+        z = serialize(z)
+        z["lot_count"] = await db.material_lots.count_documents({"company_id": user["company_id"], "zone_id": z["id"]})
+        out.append(z)
+    return out
+
+
+@api.get("/warehouse/zones/{zid}/qr.png")
+async def warehouse_zone_qr(zid: str, user: dict = Depends(get_current_user)):
+    from fastapi.responses import Response
+    z = await db.storage_zones.find_one({"id": zid, "company_id": user["company_id"]})
+    if not z: raise HTTPException(status_code=404, detail="Zona no encontrada")
+    import qrcode
+    from io import BytesIO
+    img = qrcode.make(z["qr_code"], box_size=10, border=2)
+    buf = BytesIO(); img.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
+
+
+@api.post("/warehouse/lots")
+async def warehouse_create_lot(body: LotCreateIn, user: dict = Depends(get_current_user)):
+    mat = await db.materials.find_one({"id": body.material_id, "company_id": user["company_id"]})
+    if not mat: raise HTTPException(status_code=404, detail="Material no encontrado")
+    code = await _next_lot_code()
+    unit_price = body.unit_price if body.unit_price is not None else mat.get("unit_price", 0)
+    lot = {
+        "id": str(uuid.uuid4()),
+        "lot_code": code,
+        "company_id": user["company_id"],
+        "material_id": body.material_id,
+        "quantity": body.quantity,
+        "quantity_left": body.quantity,
+        "supplier_name": body.supplier_name or mat.get("supplier", ""),
+        "unit_price": unit_price,
+        "entry_date": now_utc(),
+        "registered_by": user["id"],
+        "zone_id": None,
+        "row_label": None,
+        "status": "IN_STOCK",
+        "notes": body.notes or "",
+        "created_at": now_utc(),
+    }
+    await db.material_lots.insert_one(lot.copy())
+    await db.lot_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "company_id": user["company_id"],
+        "lot_id": lot["id"],
+        "lot_code": code,
+        "type": "INBOUND",
+        "quantity": body.quantity,
+        "project_id": None,
+        "worker_id": user["id"],
+        "timestamp": now_utc(),
+        "note": body.notes or "",
+    })
+    out = serialize(lot)
+    out["material"] = serialize(mat)
+    if user["role"] == "WORKER":
+        out["unit_price"] = None
+    return out
+
+
+@api.get("/warehouse/lots")
+async def warehouse_list_lots(
+    zone_id: Optional[str] = None,
+    status_f: Optional[str] = Query(None, alias="status"),
+    material_id: Optional[str] = None,
+    q: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
+    flt: dict = {"company_id": user["company_id"]}
+    if zone_id: flt["zone_id"] = zone_id
+    if status_f: flt["status"] = status_f
+    if material_id: flt["material_id"] = material_id
+    if q: flt["lot_code"] = {"$regex": q, "$options": "i"}
+    lots = await db.material_lots.find(flt).sort("entry_date", -1).to_list(500)
+    out = []
+    for l in lots:
+        l = serialize(l)
+        m = await db.materials.find_one({"id": l["material_id"]}, {"_id": 0})
+        l["material"] = serialize(m) if m else None
+        if user["role"] == "WORKER":
+            l["unit_price"] = None
+        out.append(l)
+    return out
+
+
+@api.get("/warehouse/lots/{lot_code}")
+async def warehouse_lot_detail(lot_code: str, user: dict = Depends(get_current_user)):
+    lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
+    if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
+    lot = serialize(lot)
+    mat = await db.materials.find_one({"id": lot["material_id"]}, {"_id": 0})
+    lot["material"] = serialize(mat) if mat else None
+    if lot.get("zone_id"):
+        z = await db.storage_zones.find_one({"id": lot["zone_id"]}, {"_id": 0})
+        lot["zone"] = serialize(z) if z else None
+    movs = await db.lot_movements.find({"lot_id": lot["id"]}).sort("timestamp", -1).to_list(100)
+    enriched = []
+    for m in movs:
+        m = serialize(m)
+        if m.get("project_id"):
+            p = await db.projects.find_one({"id": m["project_id"]}, {"_id": 0, "name": 1})
+            m["project_name"] = (p or {}).get("name")
+        u = await db.users.find_one({"id": m["worker_id"]}, {"_id": 0, "name": 1})
+        m["worker_name"] = (u or {}).get("name")
+        enriched.append(m)
+    lot["movements"] = enriched
+    if user["role"] == "WORKER":
+        lot["unit_price"] = None
+    return lot
+
+
+@api.post("/warehouse/lots/{lot_code}/locate")
+async def warehouse_locate(lot_code: str, body: LocateIn, user: dict = Depends(get_current_user)):
+    lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
+    if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
+    z = await db.storage_zones.find_one({"id": body.zone_id, "company_id": user["company_id"]})
+    if not z: raise HTTPException(status_code=404, detail="Zona no encontrada")
+    await db.material_lots.update_one({"id": lot["id"]}, {"$set": {"zone_id": body.zone_id, "row_label": body.row_label or "", "updated_at": now_utc()}})
+    await db.lot_movements.insert_one({
+        "id": str(uuid.uuid4()), "company_id": user["company_id"], "lot_id": lot["id"], "lot_code": lot_code,
+        "type": "LOCATE", "quantity": 0, "project_id": None, "worker_id": user["id"],
+        "timestamp": now_utc(), "note": f"Zona {z['name']} {body.row_label or ''}".strip(),
+    })
+    return {"ok": True, "zone": z["name"], "row": body.row_label or ""}
+
+
+@api.post("/warehouse/lots/{lot_code}/outbound")
+async def warehouse_outbound(lot_code: str, body: OutboundIn, user: dict = Depends(get_current_user)):
+    lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
+    if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
+    if body.quantity <= 0: raise HTTPException(status_code=400, detail="Cantidad debe ser positiva")
+    if body.quantity > lot["quantity_left"]:
+        raise HTTPException(status_code=409, detail=f"Stock insuficiente. Disponible: {lot['quantity_left']}")
+    proj = await db.projects.find_one({"id": body.project_id, "company_id": user["company_id"]})
+    if not proj: raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+    if user["role"] == "WORKER" and user["id"] not in proj.get("assigned_worker_ids", []):
+        raise HTTPException(status_code=403, detail="Sin acceso al proyecto")
+    new_left = lot["quantity_left"] - body.quantity
+    new_status = _lot_status(new_left, lot["quantity"])
+    await db.material_lots.update_one({"id": lot["id"]}, {"$set": {"quantity_left": new_left, "status": new_status, "updated_at": now_utc()}})
+    await db.lot_movements.insert_one({
+        "id": str(uuid.uuid4()), "company_id": user["company_id"], "lot_id": lot["id"], "lot_code": lot_code,
+        "type": "OUTBOUND", "quantity": body.quantity, "project_id": body.project_id, "worker_id": user["id"],
+        "timestamp": now_utc(), "note": body.note or "",
+    })
+    # also create MaterialEntry on the project (USAGE) so existing project finance flows pick it up
+    unit_price = lot.get("unit_price") or 0
+    await db.material_entries.insert_one({
+        "id": str(uuid.uuid4()), "company_id": user["company_id"],
+        "project_id": body.project_id, "material_id": lot["material_id"],
+        "quantity": body.quantity, "unit_price": unit_price, "total_cost": round(unit_price * body.quantity, 2),
+        "type": "USAGE", "worker_id": user["id"], "date": now_utc().isoformat(),
+        "notes": f"Salida lote {lot_code}", "receipt_photo": None, "created_at": now_utc(),
+    })
+    return {"ok": True, "quantity_left": new_left, "status": new_status}
+
+
+@api.post("/warehouse/lots/{lot_code}/adjust")
+async def warehouse_adjust(lot_code: str, body: AdjustIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+    lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
+    if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
+    new_left = max(0.0, lot["quantity_left"] + body.quantity)
+    new_status = _lot_status(new_left, lot["quantity"])
+    await db.material_lots.update_one({"id": lot["id"]}, {"$set": {"quantity_left": new_left, "status": new_status, "updated_at": now_utc()}})
+    await db.lot_movements.insert_one({
+        "id": str(uuid.uuid4()), "company_id": user["company_id"], "lot_id": lot["id"], "lot_code": lot_code,
+        "type": "ADJUST", "quantity": body.quantity, "project_id": None, "worker_id": user["id"],
+        "timestamp": now_utc(), "note": body.note or "",
+    })
+    return {"ok": True, "quantity_left": new_left, "status": new_status}
+
+
+@api.get("/warehouse/stock")
+async def warehouse_stock(user: dict = Depends(get_current_user)):
+    """Aggregated stock per material (sum quantity_left across lots)."""
+    pipe = [
+        {"$match": {"company_id": user["company_id"], "status": {"$ne": "DEPLETED"}}},
+        {"$group": {
+            "_id": "$material_id",
+            "total": {"$sum": "$quantity_left"},
+            "lot_count": {"$sum": 1},
+            "value": {"$sum": {"$multiply": ["$quantity_left", "$unit_price"]}},
+        }},
+    ]
+    rows = await db.material_lots.aggregate(pipe).to_list(2000)
+    out = []
+    for r in rows:
+        m = await db.materials.find_one({"id": r["_id"]}, {"_id": 0})
+        if not m: continue
+        item = {
+            "material_id": r["_id"],
+            "name": m.get("name"),
+            "category": m.get("category"),
+            "unit": m.get("unit"),
+            "total": round(r["total"], 2),
+            "lot_count": r["lot_count"],
+            "low_stock": r["total"] < 5,  # simple threshold
+        }
+        if user["role"] != "WORKER":
+            item["value"] = round(r["value"], 2)
+        out.append(item)
+    out.sort(key=lambda x: (x["category"], x["name"]))
+    return out
+
+
+@api.get("/warehouse/movements")
+async def warehouse_movements(
+    project_id: Optional[str] = None,
+    worker_id: Optional[str] = None,
+    type_f: Optional[str] = Query(None, alias="type"),
+    user: dict = Depends(get_current_user),
+):
+    flt: dict = {"company_id": user["company_id"]}
+    if project_id: flt["project_id"] = project_id
+    if worker_id: flt["worker_id"] = worker_id
+    if type_f: flt["type"] = type_f
+    if user["role"] == "WORKER": flt["worker_id"] = user["id"]
+    movs = await db.lot_movements.find(flt).sort("timestamp", -1).to_list(500)
+    out = []
+    for m in movs:
+        m = serialize(m)
+        u = await db.users.find_one({"id": m["worker_id"]}, {"_id": 0, "name": 1})
+        m["worker_name"] = (u or {}).get("name")
+        if m.get("project_id"):
+            p = await db.projects.find_one({"id": m["project_id"]}, {"_id": 0, "name": 1})
+            m["project_name"] = (p or {}).get("name")
+        out.append(m)
+    return out
+
+
+@api.get("/warehouse/dashboard")
+async def warehouse_dashboard(user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+    cid = user["company_id"]
+    today = datetime(now_utc().year, now_utc().month, now_utc().day, tzinfo=timezone.utc)
+    lots_count = await db.material_lots.count_documents({"company_id": cid, "status": {"$ne": "DEPLETED"}})
+    movements_today = await db.lot_movements.count_documents({"company_id": cid, "timestamp": {"$gte": today}})
+    val_pipe = [
+        {"$match": {"company_id": cid, "status": {"$ne": "DEPLETED"}}},
+        {"$group": {"_id": None, "v": {"$sum": {"$multiply": ["$quantity_left", "$unit_price"]}}}},
+    ]
+    val_res = await db.material_lots.aggregate(val_pipe).to_list(1)
+    stock_value = round(val_res[0]["v"], 2) if val_res else 0
+    stock = await warehouse_stock(user)  # type: ignore
+    low = [s for s in stock if s.get("low_stock")]
+    # top 10 by movements this week
+    week_start = now_utc() - timedelta(days=7)
+    top_pipe = [
+        {"$match": {"company_id": cid, "timestamp": {"$gte": week_start}}},
+        {"$group": {"_id": "$lot_id", "n": {"$sum": 1}}},
+        {"$sort": {"n": -1}},
+        {"$limit": 10},
+    ]
+    tops = await db.lot_movements.aggregate(top_pipe).to_list(10)
+    top_materials = []
+    for t in tops:
+        lot = await db.material_lots.find_one({"id": t["_id"]}, {"_id": 0, "material_id": 1, "lot_code": 1})
+        if not lot: continue
+        m = await db.materials.find_one({"id": lot["material_id"]}, {"_id": 0, "name": 1})
+        top_materials.append({"lot_code": lot["lot_code"], "material_name": (m or {}).get("name"), "movements": t["n"]})
+    return {
+        "lots_count": lots_count,
+        "movements_today": movements_today,
+        "low_stock_count": len(low),
+        "stock_value": stock_value,
+        "low_stock": low[:10],
+        "top_movements": top_materials,
+    }
+
+
+def _build_label_png(lot: dict, material: dict, zone_name: Optional[str] = None) -> bytes:
+    """Build a 80mm-wide PNG label using PIL + qrcode."""
+    import qrcode
+    from PIL import Image, ImageDraw, ImageFont
+    from io import BytesIO
+    width = 600  # ~80mm at 192dpi-ish
+    height = 760
+    img = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(img)
+    try:
+        font_b = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
+        font_m = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 26)
+        font_r = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+        font_s = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+    except Exception:
+        font_b = font_m = font_r = font_s = ImageFont.load_default()
+    # Header
+    draw.text((width // 2, 30), "ELEGANT GLASS", anchor="mm", fill="black", font=font_b)
+    draw.line([(20, 70), (width - 20, 70)], fill="black", width=2)
+    # QR
+    qr = qrcode.QRCode(box_size=8, border=1)
+    qr.add_data(lot["lot_code"]); qr.make(fit=True)
+    qimg = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    qw, qh = qimg.size
+    img.paste(qimg, ((width - qw) // 2, 90))
+    # Lot code below QR
+    draw.text((width // 2, 90 + qh + 18), lot["lot_code"], anchor="mm", fill="black", font=font_m)
+    y = 90 + qh + 60
+    # Material name (wrap)
+    name = (material or {}).get("name", "—")
+    if len(name) > 28:
+        draw.text((30, y), name[:28], fill="black", font=font_b); y += 42
+        draw.text((30, y), name[28:56], fill="black", font=font_b); y += 42
+    else:
+        draw.text((30, y), name, fill="black", font=font_b); y += 44
+    # Quantity + entry date
+    qty_line = f"{lot['quantity']:g} {(material or {}).get('unit', '')} · Entrada {lot['entry_date'].strftime('%d/%m/%Y') if isinstance(lot['entry_date'], datetime) else str(lot['entry_date'])[:10]}"
+    draw.text((30, y), qty_line, fill="black", font=font_r); y += 32
+    if lot.get("supplier_name"):
+        draw.text((30, y), f"Proveedor: {lot['supplier_name']}", fill="black", font=font_s); y += 28
+    if zone_name:
+        draw.text((30, y), f"Zona: {zone_name} · {lot.get('row_label') or ''}".strip(), fill="black", font=font_s); y += 28
+    # Footer
+    draw.line([(20, height - 50), (width - 20, height - 50)], fill="black", width=2)
+    draw.text((width // 2, height - 25), "glasswork.app", anchor="mm", fill="black", font=font_s)
+    buf = BytesIO(); img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@api.get("/warehouse/lots/{lot_code}/label.png")
+async def warehouse_label_png(lot_code: str, user: dict = Depends(get_current_user)):
+    from fastapi.responses import Response
+    lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
+    if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
+    mat = await db.materials.find_one({"id": lot["material_id"]}, {"_id": 0})
+    zone_name = None
+    if lot.get("zone_id"):
+        z = await db.storage_zones.find_one({"id": lot["zone_id"]}, {"_id": 0, "name": 1})
+        zone_name = (z or {}).get("name")
+    png = _build_label_png(lot, mat or {}, zone_name)
+    return Response(content=png, media_type="image/png")
+
+
+@api.get("/warehouse/lots/{lot_code}/label-preview")
+async def warehouse_label_preview(lot_code: str, user: dict = Depends(get_current_user)):
+    """Returns base64 PNG for in-app preview."""
+    lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
+    if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
+    mat = await db.materials.find_one({"id": lot["material_id"]}, {"_id": 0})
+    zone_name = None
+    if lot.get("zone_id"):
+        z = await db.storage_zones.find_one({"id": lot["zone_id"]}, {"_id": 0, "name": 1})
+        zone_name = (z or {}).get("name")
+    png = _build_label_png(lot, mat or {}, zone_name)
+    import base64 as _b64
+    return {
+        "filename": f"etiqueta_{lot_code}.png",
+        "mime": "image/png",
+        "base64": _b64.b64encode(png).decode("ascii"),
+    }
+
+
+def _build_escpos_bytes(lot: dict, material: dict, zone_name: Optional[str]) -> bytes:
+    """Build ESC/POS sequence for an 80mm thermal printer."""
+    import qrcode
+    ESC = b"\x1b"; GS = b"\x1d"
+    out = bytearray()
+    out += ESC + b"@"  # init
+    out += ESC + b"a" + b"\x01"  # center
+    # Title double height + bold
+    out += ESC + b"E" + b"\x01"  # bold on
+    out += GS + b"!" + b"\x11"  # double width+height
+    out += b"ELEGANT GLASS\n"
+    out += GS + b"!" + b"\x00"  # normal
+    out += ESC + b"E" + b"\x00"  # bold off
+    out += b"--------------------------------\n"
+    # QR using GS ( k commands (model 2)
+    code = lot["lot_code"].encode("ascii")
+    # Set model 2
+    out += GS + b"(k" + b"\x04\x00\x31\x41\x32\x00"
+    # Set size (1-16); 8 = large
+    out += GS + b"(k" + b"\x03\x00\x31\x43" + bytes([8])
+    # Error correction level L
+    out += GS + b"(k" + b"\x03\x00\x31\x45\x30"
+    # Store data
+    pl = len(code) + 3
+    out += GS + b"(k" + bytes([pl & 0xff, (pl >> 8) & 0xff]) + b"\x31\x50\x30" + code
+    # Print
+    out += GS + b"(k" + b"\x03\x00\x31\x51\x30"
+    out += b"\n"
+    # Lot code text (bold)
+    out += ESC + b"E" + b"\x01"
+    out += GS + b"!" + b"\x10"  # double width
+    out += code + b"\n"
+    out += GS + b"!" + b"\x00"
+    out += ESC + b"E" + b"\x00"
+    out += ESC + b"a" + b"\x00"  # left
+    out += b"\n"
+    name = (material or {}).get("name", "")[:60]
+    out += ESC + b"E" + b"\x01" + name.encode("utf-8", "replace") + b"\n" + ESC + b"E" + b"\x00"
+    qty_line = f"{lot['quantity']:g} {(material or {}).get('unit','')}"
+    entry = lot["entry_date"]
+    if isinstance(entry, datetime):
+        date_s = entry.strftime("%d/%m/%Y")
+    else:
+        date_s = str(entry)[:10]
+    out += f"{qty_line} - Entrada {date_s}\n".encode("utf-8", "replace")
+    if lot.get("supplier_name"):
+        out += f"Proveedor: {lot['supplier_name']}\n".encode("utf-8", "replace")
+    if zone_name:
+        out += f"Zona: {zone_name} {lot.get('row_label') or ''}\n".encode("utf-8", "replace")
+    out += b"--------------------------------\n"
+    out += b"\n\n\n"
+    out += GS + b"V" + b"\x42" + b"\x00"  # partial cut
+    return bytes(out)
+
+
+@api.post("/warehouse/lots/{lot_code}/print")
+async def warehouse_print(lot_code: str, user: dict = Depends(get_current_user)):
+    lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
+    if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
+    mat = await db.materials.find_one({"id": lot["material_id"]}, {"_id": 0})
+    zone_name = None
+    if lot.get("zone_id"):
+        z = await db.storage_zones.find_one({"id": lot["zone_id"]}, {"_id": 0, "name": 1})
+        zone_name = (z or {}).get("name")
+    payload = _build_escpos_bytes(lot, mat or {}, zone_name)
+    printer_ip = os.environ.get("PRINTER_IP", "").strip()
+    printer_port = int(os.environ.get("PRINTER_PORT", "9100") or 9100)
+    if not printer_ip:
+        raise HTTPException(status_code=503, detail="Impresora no configurada (PRINTER_IP vacío). Configura la IP en .env y reintenta.")
+    import socket as _socket
+    try:
+        with _socket.create_connection((printer_ip, printer_port), timeout=5) as s:
+            s.sendall(payload)
+        return {"ok": True, "bytes": len(payload)}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"No se pudo conectar a la impresora ({printer_ip}:{printer_port}): {e}")
+
+
+# =========================================================
 # Health
 # =========================================================
 @api.get("/")
@@ -1322,6 +1828,117 @@ async def ensure_indexes():
     await db.material_entries.create_index([("company_id", 1), ("project_id", 1)])
     await db.daily_logs.create_index([("company_id", 1), ("worker_id", 1)])
     await db.project_photos.create_index([("company_id", 1), ("project_id", 1)])
+    await db.material_lots.create_index("lot_code", unique=True)
+    await db.material_lots.create_index([("company_id", 1), ("zone_id", 1)])
+    await db.lot_movements.create_index([("company_id", 1), ("lot_id", 1)])
+    await db.storage_zones.create_index([("company_id", 1), ("name", 1)])
+
+
+async def seed_warehouse():
+    """Idempotent warehouse seed — runs after main seed and only fills if empty."""
+    if await db.material_lots.count_documents({}) > 0:
+        return
+    company = await db.companies.find_one({"name": "Aluminios Elegant Glass"}, {"_id": 0})
+    if not company:
+        return
+    cid = company["id"]
+    admin = await db.users.find_one({"company_id": cid, "role": "ADMIN"}, {"_id": 0, "id": 1})
+    workers = await db.users.find({"company_id": cid, "role": "WORKER"}, {"_id": 0, "id": 1, "name": 1}).to_list(10)
+    if not admin or not workers:
+        return
+    materials = await db.materials.find({"company_id": cid}, {"_id": 0}).to_list(200)
+    if not materials:
+        return
+    logger.info("Seeding warehouse data...")
+    # 4 zones
+    zone_defs = [
+        ("Zona A — Perfilería", "PERFILERIA", 12),
+        ("Zona B — Vidrio", "VIDRIO", 8),
+        ("Zona C — Herrajes", "HERRAJES", 10),
+        ("Zona D — Consumibles", "CONSUMIBLES", 15),
+    ]
+    zones = []
+    for name, cat, rc in zone_defs:
+        zid = str(uuid.uuid4())
+        z = {
+            "id": zid, "company_id": cid, "name": name, "category": cat,
+            "row_count": rc, "qr_code": f"ZONE-{zid}", "created_at": now_utc(),
+        }
+        zones.append(z)
+    await db.storage_zones.insert_many([z.copy() for z in zones])
+    zones_by_cat = {z["category"]: z for z in zones}
+
+    # 20 lots
+    lots = []
+    movements = []
+    for i in range(20):
+        mat = materials[i % len(materials)]
+        zone = zones_by_cat.get(mat.get("category"))
+        worker = workers[i % len(workers)]
+        qty_total = [10, 4, 2, 25, 8, 1, 50, 12][i % 8]
+        # one or two lots are below low threshold (< 5) and partial
+        qty_left = qty_total
+        status = "IN_STOCK"
+        if i in (3, 7):  # leave low stock
+            qty_left = 2
+            status = "PARTIAL"
+        elif i in (1, 11):
+            qty_left = qty_total * 0.6
+            status = "PARTIAL"
+        entry = now_utc() - timedelta(days=30 - i)
+        lot = {
+            "id": str(uuid.uuid4()),
+            "lot_code": f"EG-{now_utc().year}-{i+1:04d}",
+            "company_id": cid,
+            "material_id": mat["id"],
+            "quantity": qty_total,
+            "quantity_left": qty_left,
+            "supplier_name": mat.get("supplier", ""),
+            "unit_price": mat.get("unit_price", 0),
+            "entry_date": entry,
+            "registered_by": admin["id"],
+            "zone_id": zone["id"] if zone else None,
+            "row_label": f"Fila {(i % 6) + 1}",
+            "status": status,
+            "notes": "",
+            "created_at": entry,
+        }
+        lots.append(lot)
+        # INBOUND movement
+        movements.append({
+            "id": str(uuid.uuid4()), "company_id": cid, "lot_id": lot["id"],
+            "lot_code": lot["lot_code"], "type": "INBOUND", "quantity": qty_total,
+            "project_id": None, "worker_id": admin["id"], "timestamp": entry, "note": "Recepción inicial",
+        })
+        # LOCATE movement if has zone
+        if lot["zone_id"]:
+            movements.append({
+                "id": str(uuid.uuid4()), "company_id": cid, "lot_id": lot["id"],
+                "lot_code": lot["lot_code"], "type": "LOCATE", "quantity": 0,
+                "project_id": None, "worker_id": admin["id"],
+                "timestamp": entry + timedelta(hours=1), "note": f"Ubicado en {zone['name']}",
+            })
+        # If partial → outbound movements
+        if status == "PARTIAL" and qty_left < qty_total:
+            consumed = qty_total - qty_left
+            projects = await db.projects.find({"company_id": cid}, {"_id": 0, "id": 1}).to_list(10)
+            if projects:
+                proj = projects[i % len(projects)]
+                movements.append({
+                    "id": str(uuid.uuid4()), "company_id": cid, "lot_id": lot["id"],
+                    "lot_code": lot["lot_code"], "type": "OUTBOUND", "quantity": consumed,
+                    "project_id": proj["id"], "worker_id": worker["id"],
+                    "timestamp": entry + timedelta(days=2), "note": "Salida a obra",
+                })
+    await db.material_lots.insert_many([l.copy() for l in lots])
+    if movements:
+        await db.lot_movements.insert_many(movements)
+    logger.info(f"Warehouse seeded: {len(zones)} zones, {len(lots)} lots, {len(movements)} movements.")
+
+
+@app.on_event("startup")
+async def startup_warehouse():
+    await seed_warehouse()
 
 
 async def seed():
