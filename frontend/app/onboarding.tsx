@@ -56,10 +56,10 @@ const ADMIN_SLIDES: Slide[] = [
   },
   {
     icon: 'document-text-outline',
-    title: 'Reportes profesionales',
+    title: 'Reportes para cliente',
     description:
-      'Genera PDF y Excel semanales con un toque. Datos listos para compartir con clientes y contabilidad.',
-    bullets: ['PDF maquetado con KPIs', 'Excel con 4 hojas', 'Exportar todo (GDPR)'],
+      'Genera un PDF premium por cada obra finalizada para enviar al cliente con un toque profesional.',
+    bullets: ['Portada con logo y cliente', 'Galería fotográfica antes/después', 'Firma digital del responsable'],
   },
 ];
 

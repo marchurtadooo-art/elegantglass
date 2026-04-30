@@ -1,168 +1,184 @@
-"""Backend tests for the new endpoint:
-GET /api/warehouse/zones/{zid}/qr-base64
-
-Per review request, only this endpoint is validated.
-"""
+"""Backend tests for GLASSWORK client-report endpoints (new in this session)."""
 import base64
-import os
-import sys
+import re
+import zlib
+
 import requests
 
-BASE_URL = "https://site-glass-preview.preview.emergentagent.com"
-API = f"{BASE_URL}/api"
+BASE = "https://site-glass-preview.preview.emergentagent.com/api"
 
 ADMIN_EMAIL = "jefe@elegantglass.es"
 ADMIN_PASSWORD = "Admin1234!"
-
-PNG_MAGIC = b"\x89PNG"
-
-
-def _print(label, ok, detail=""):
-    status = "PASS" if ok else "FAIL"
-    print(f"[{status}] {label}{(' — ' + detail) if detail else ''}")
+WORKER_EMAIL = "carlos@elegantglass.es"
+WORKER_PASSWORD = "Worker1234!"
 
 
-def login_admin():
-    r = requests.post(
-        f"{API}/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=20,
-    )
-    assert r.status_code == 200, f"login status {r.status_code}: {r.text}"
-    data = r.json()
-    assert "access_token" in data, f"no access_token in response: {data}"
-    return data["access_token"]
+def login(email, password):
+    r = requests.post(f"{BASE}/auth/login", json={"email": email, "password": password}, timeout=30)
+    assert r.status_code == 200, f"login failed {email}: {r.status_code} {r.text}"
+    return r.json()["access_token"]
 
 
-def list_zones(token):
-    r = requests.get(
-        f"{API}/warehouse/zones",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=20,
-    )
-    assert r.status_code == 200, f"list zones status {r.status_code}: {r.text}"
-    zones = r.json()
-    assert isinstance(zones, list), f"expected list, got {type(zones)}"
-    return zones
+def authed(tok):
+    return {"Authorization": f"Bearer {tok}"}
 
 
-def test_qr_base64_success(token, zid):
-    r = requests.get(
-        f"{API}/warehouse/zones/{zid}/qr-base64",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=20,
-    )
-    assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text}"
-    body = r.json()
-    # Required keys
-    for k in ("filename", "mime", "base64", "qr_code"):
-        assert k in body, f"missing key {k} in response: {body}"
-    assert body["mime"] == "image/png", f"mime expected image/png, got {body['mime']}"
-    assert isinstance(body["filename"], str) and body["filename"].endswith(".png"), (
-        f"filename invalid: {body['filename']}"
-    )
-    assert isinstance(body["qr_code"], str) and body["qr_code"], (
-        f"qr_code invalid: {body['qr_code']}"
-    )
-    assert isinstance(body["base64"], str) and len(body["base64"]) > 0, (
-        "base64 must be non-empty string"
-    )
-    # Verify decodes to valid PNG
-    raw = base64.b64decode(body["base64"], validate=True)
-    assert raw[:4] == PNG_MAGIC, (
-        f"decoded bytes do not start with PNG magic; got {raw[:8]!r}"
-    )
-    return body
+results = []
 
 
-def test_qr_base64_no_auth(zid):
-    r = requests.get(f"{API}/warehouse/zones/{zid}/qr-base64", timeout=20)
-    assert r.status_code in (401, 403), (
-        f"expected 401/403 without auth, got {r.status_code}: {r.text}"
-    )
-    return r.status_code
-
-
-def test_qr_base64_not_found(token):
-    r = requests.get(
-        f"{API}/warehouse/zones/non-existent-id/qr-base64",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=20,
-    )
-    assert r.status_code == 404, (
-        f"expected 404 for non-existent id, got {r.status_code}: {r.text}"
-    )
-    return r.status_code
+def record(case, passed, detail=""):
+    icon = "PASS" if passed else "FAIL"
+    print(f"[{icon}] {case}: {detail}")
+    results.append((case, passed, detail))
 
 
 def main():
-    failures = []
+    print(f"BASE URL: {BASE}")
 
-    # 1. Login
     try:
-        token = login_admin()
-        _print("admin login", True, "got access_token")
+        admin_token = login(ADMIN_EMAIL, ADMIN_PASSWORD)
+        record("admin login", True, "token obtained")
     except Exception as e:
-        _print("admin login", False, str(e))
-        return 1
+        record("admin login", False, str(e))
+        return
 
-    # 2. List zones
-    try:
-        zones = list_zones(token)
-        _print("list zones", True, f"{len(zones)} zone(s) returned")
-    except Exception as e:
-        _print("list zones", False, str(e))
-        return 1
+    # Case 1
+    r = requests.get(f"{BASE}/reports/projects", headers=authed(admin_token), timeout=30)
+    case1_ok = r.status_code == 200
+    projects = []
+    if case1_ok:
+        projects = r.json()
+        if not isinstance(projects, list):
+            case1_ok = False
+        else:
+            required = {"id", "name", "status", "client_name", "address",
+                        "hours_total", "workers_count", "photo_count", "log_count",
+                        "start_date", "end_date"}
+            missing_fields = []
+            for p in projects:
+                missing = required - set(p.keys())
+                if missing:
+                    missing_fields.append((p.get("id"), list(missing)))
+            if missing_fields:
+                case1_ok = False
+                record("Case 1 - fields", False, f"Missing fields on items: {missing_fields[:3]}")
+            else:
+                record("Case 1 - fields", True, f"All {len(projects)} projects contain required fields")
 
-    if not zones:
-        _print("pick first zone", False, "no zones available — cannot test qr-base64 success path")
-        # We can still test no-auth / 404
-        zid = "non-existent-id"
+            status_order = {"COMPLETED": 0, "ACTIVE": 1, "PAUSED": 2, "PENDING": 3, "CANCELLED": 4}
+            ordered_statuses = [p["status"] for p in projects]
+            mapped = [status_order.get(s, 9) for s in ordered_statuses]
+            is_sorted = all(mapped[i] <= mapped[i + 1] for i in range(len(mapped) - 1))
+            record("Case 1 - sorting", is_sorted, f"status order: {ordered_statuses}")
+            if not is_sorted:
+                case1_ok = False
+    record("Case 1 - GET /reports/projects admin 200", case1_ok,
+           f"status={r.status_code}, items={len(projects) if isinstance(projects, list) else 'n/a'}")
+
+    # Case 2
+    active_proj = next((p for p in projects if p.get("status") == "ACTIVE"), None)
+    completed_id = None
+    if not active_proj:
+        record("Case 2 - mark-complete", False, "No ACTIVE project found; using existing COMPLETED for case 3")
+        already_completed = next((p for p in projects if p.get("status") == "COMPLETED"), None)
+        if already_completed:
+            completed_id = already_completed["id"]
     else:
-        zid = zones[0]["id"]
-        _print("pick first zone", True, f"zid={zid} name={zones[0].get('name')}")
+        r2 = requests.post(f"{BASE}/projects/{active_proj['id']}/mark-complete",
+                           headers=authed(admin_token), timeout=30)
+        ok2 = r2.status_code == 200
+        detail = f"status={r2.status_code}"
+        if ok2:
+            j = r2.json()
+            status_ok = j.get("status") == "COMPLETED"
+            date_ok = bool(j.get("actual_end_date"))
+            prog_ok = j.get("progress_percentage") == 100
+            ok2 = status_ok and date_ok and prog_ok
+            detail = (f"status={j.get('status')}, actual_end_date={j.get('actual_end_date')}, "
+                      f"progress_percentage={j.get('progress_percentage')}")
+            completed_id = active_proj["id"]
+        record("Case 2 - POST /projects/{id}/mark-complete", ok2,
+               f"project={active_proj.get('name')} id={active_proj['id']} | {detail}")
 
-    # 3. Success path (requires real zone)
-    if zones:
-        try:
-            body = test_qr_base64_success(token, zid)
-            preview = body["base64"][:24] + "..."
-            _print(
-                "GET qr-base64 (200, valid PNG)",
-                True,
-                f"filename={body['filename']} qr_code={body['qr_code']} base64={preview}",
-            )
-        except Exception as e:
-            failures.append(("qr-base64 success", str(e)))
-            _print("GET qr-base64 (200, valid PNG)", False, str(e))
+    # Case 3
+    pdf_bytes = b""
+    if completed_id:
+        r3 = requests.get(f"{BASE}/projects/{completed_id}/client-report/pdf",
+                          headers=authed(admin_token), timeout=60)
+        ok3 = r3.status_code == 200
+        if ok3:
+            j = r3.json()
+            has_keys = all(k in j for k in ("filename", "mime", "base64"))
+            mime_ok = j.get("mime") == "application/pdf"
+            try:
+                pdf_bytes = base64.b64decode(j.get("base64", ""))
+            except Exception as e:
+                pdf_bytes = b""
+                record("Case 3 - base64 decode", False, str(e))
+            magic_ok = pdf_bytes.startswith(b"%PDF-")
+            size_ok = len(pdf_bytes) > 2000
+            ok3 = has_keys and mime_ok and magic_ok and size_ok
+            record("Case 3 - GET client-report/pdf", ok3,
+                   f"filename={j.get('filename')}, mime={j.get('mime')}, "
+                   f"magic_ok={magic_ok}, size={len(pdf_bytes)} bytes")
+        else:
+            record("Case 3 - GET client-report/pdf", False,
+                   f"status={r3.status_code} body={r3.text[:200]}")
     else:
-        failures.append(("qr-base64 success", "no zones to test against"))
+        record("Case 3 - GET client-report/pdf", False, "No completed project id available")
 
-    # 4. No auth
+    # Case 4
+    r4 = requests.get(f"{BASE}/projects/nonexistent-xyz-999/client-report/pdf",
+                      headers=authed(admin_token), timeout=30)
+    ok4 = r4.status_code == 404
+    record("Case 4 - nonexistent project → 404", ok4, f"status={r4.status_code}")
+
+    # Case 5
+    r5 = requests.get(f"{BASE}/reports/projects", timeout=30)
+    ok5 = r5.status_code == 401
+    record("Case 5 - GET /reports/projects NO token → 401", ok5, f"status={r5.status_code}")
+
+    # Case 6
     try:
-        code = test_qr_base64_no_auth(zid if zones else "any-id")
-        _print("GET qr-base64 without token (401/403)", True, f"status={code}")
+        worker_token = login(WORKER_EMAIL, WORKER_PASSWORD)
+        r6 = requests.get(f"{BASE}/reports/projects", headers=authed(worker_token), timeout=30)
+        ok6 = r6.status_code == 403
+        record("Case 6 - worker GET /reports/projects → 403", ok6, f"status={r6.status_code}")
     except Exception as e:
-        failures.append(("qr-base64 no-auth", str(e)))
-        _print("GET qr-base64 without token (401/403)", False, str(e))
+        record("Case 6 - worker login/access", False, str(e))
 
-    # 5. Not found
-    try:
-        code = test_qr_base64_not_found(token)
-        _print("GET qr-base64 with bad id (404)", True, f"status={code}")
-    except Exception as e:
-        failures.append(("qr-base64 not-found", str(e)))
-        _print("GET qr-base64 with bad id (404)", False, str(e))
+    # Financial leak check
+    if pdf_bytes:
+        raw = pdf_bytes
+        decoded_chunks = [raw]
+        stream_re = re.compile(rb"stream\s*(.*?)\s*endstream", re.DOTALL)
+        for m in stream_re.finditer(raw):
+            blob = m.group(1)
+            try:
+                decoded_chunks.append(zlib.decompress(blob))
+            except Exception:
+                try:
+                    decoded_chunks.append(zlib.decompress(blob.lstrip(b"\r\n")))
+                except Exception:
+                    pass
 
-    print("\n=== SUMMARY ===")
-    if failures:
-        print(f"{len(failures)} failure(s):")
-        for name, msg in failures:
-            print(f" - {name}: {msg}")
-        return 1
-    print("All qr-base64 endpoint checks passed.")
-    return 0
+        combined = b"\n".join(decoded_chunks).lower()
+        strict_keywords = ["unit_price", "budget", "total_cost"]
+        strict_leaks = [k for k in strict_keywords if k.encode("utf-8") in combined]
+        record("Financial leak — strict (unit_price/budget/total_cost)", not strict_leaks,
+               f"strict leaks: {strict_leaks}" if strict_leaks else "none of the three strict keywords found")
+
+        info_keywords = ["presupuesto", "coste", "precio", "gastado", "\u20ac", "eur ", " eur"]
+        info_hits = [k for k in info_keywords if k.encode("utf-8", errors="ignore") in combined]
+        print(f"[INFO] Additional price/currency-related terms visible: {info_hits}")
+
+    # Summary
+    print("\n================ SUMMARY ================")
+    for case, passed, detail in results:
+        print(f"{'OK ' if passed else 'FAIL'} | {case} | {detail}")
+    failed = [c for c, p, _ in results if not p]
+    print(f"\n{len(results) - len(failed)}/{len(results)} passed. Failures: {failed}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

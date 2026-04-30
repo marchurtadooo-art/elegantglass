@@ -8,6 +8,7 @@ import { Button, Card, HeaderBar, ProgressBar, Segmented, Skeleton, StatusBadge,
 import { PhotoViewer } from '../../src/PhotoViewer';
 import { api, apiError } from '../../src/api';
 import { useAuth } from '../../src/auth';
+import { downloadBase64File, shareBase64File } from '../../src/files';
 
 type Tab = 'RESUMEN' | 'PARTES' | 'FOTOS' | 'MATERIALES' | 'BALANCE' | 'EQUIPO';
 
@@ -42,6 +43,41 @@ export default function ProjectDetail() {
       await api.patch(`/daily-logs/${logId}/review`, { status, review_comment: '' });
       await load();
     } catch (e) { Alert.alert('Error', apiError(e)); }
+  };
+
+  const [busyReport, setBusyReport] = useState<null | 'dl' | 'share'>(null);
+  const generateReport = async (mode: 'dl' | 'share') => {
+    setBusyReport(mode);
+    try {
+      const r = await api.get(`/projects/${id}/client-report/pdf`);
+      if (mode === 'share') await shareBase64File(r.data);
+      else await downloadBase64File(r.data);
+    } catch (e) {
+      Alert.alert('Error', apiError(e));
+    } finally {
+      setBusyReport(null);
+    }
+  };
+
+  const markComplete = async () => {
+    Alert.alert(
+      'Marcar como completada',
+      '¿Confirmas que la obra está terminada? Se registrará la fecha de hoy como finalización.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Completar',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await api.post(`/projects/${id}/mark-complete`);
+              await load();
+              Alert.alert('Obra completada', 'Ya puedes generar el reporte final para el cliente.');
+            } catch (e) { Alert.alert('Error', apiError(e)); }
+          },
+        },
+      ],
+    );
   };
 
   if (!project) {
@@ -109,7 +145,80 @@ export default function ProjectDetail() {
         </View>
 
         <View style={{ padding: SPACING.lg }}>
-          {tab === 'RESUMEN' && <ResumenTab project={project} isWorker={isWorker} fmtEur={fmtEur} />}
+          {tab === 'RESUMEN' && (
+            <>
+              {!isWorker ? (
+                <View style={{ marginBottom: SPACING.md, gap: 8 }}>
+                  {project.status === 'COMPLETED' ? (
+                    <Card style={styles.reportCard}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                        <Text style={[TYPO.bodyMedium, { marginLeft: 8, color: COLORS.success }]}>Obra completada</Text>
+                      </View>
+                      <Text style={[TYPO.body, { color: COLORS.textSecondary, marginBottom: SPACING.md }]}>
+                        Genera el reporte premium para enviar al cliente. Sin datos económicos, firma digital incluida.
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <Button
+                            title="Descargar"
+                            variant="secondary"
+                            icon="download-outline"
+                            loading={busyReport === 'dl'}
+                            onPress={() => generateReport('dl')}
+                            testID="report-download"
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Button
+                            title="Enviar al cliente"
+                            icon="paper-plane-outline"
+                            loading={busyReport === 'share'}
+                            onPress={() => generateReport('share')}
+                            testID="report-share"
+                          />
+                        </View>
+                      </View>
+                    </Card>
+                  ) : (
+                    <Card>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="flag-outline" size={20} color={COLORS.primary} />
+                        <View style={{ marginLeft: 10, flex: 1 }}>
+                          <Text style={TYPO.bodyMedium}>¿Obra finalizada?</Text>
+                          <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12 }]}>
+                            Marca la obra como completada para generar el reporte premium al cliente.
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ height: SPACING.md }} />
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <Button
+                            title="Vista previa"
+                            variant="secondary"
+                            icon="document-outline"
+                            loading={busyReport === 'dl'}
+                            onPress={() => generateReport('dl')}
+                            testID="report-preview"
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Button
+                            title="Marcar completada"
+                            icon="checkmark-circle-outline"
+                            onPress={markComplete}
+                            testID="mark-complete"
+                          />
+                        </View>
+                      </View>
+                    </Card>
+                  )}
+                </View>
+              ) : null}
+              <ResumenTab project={project} isWorker={isWorker} fmtEur={fmtEur} />
+            </>
+          )}
           {tab === 'PARTES' && <PartesTab logs={logs} isWorker={isWorker} onReview={reviewLog} onAdd={() => router.push({ pathname: '/log/new', params: { projectId: id } })} />}
           {tab === 'FOTOS' && <FotosTab photos={photos} onAdd={() => router.push({ pathname: '/photo/capture', params: { projectId: id } })} />}
           {tab === 'MATERIALES' && <MaterialesTab entries={entries} isWorker={isWorker} onAdd={() => router.push({ pathname: '/material/register', params: { projectId: id } })} fmtEur={fmtEur} />}
@@ -334,4 +443,9 @@ const styles = StyleSheet.create({
   },
   heroProg: { height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden' },
   heroProgFill: { height: 6, backgroundColor: COLORS.surface, borderRadius: 3 },
+  reportCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.success,
+    backgroundColor: COLORS.successBg,
+  },
 });

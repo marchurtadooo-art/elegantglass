@@ -1245,6 +1245,478 @@ async def report_excel(rid: str, user: dict = Depends(require_role("ADMIN", "MAN
 
 
 # =========================================================
+# CLIENT REPORTS — one report per project (premium)
+# =========================================================
+@api.get("/reports/projects")
+async def list_project_reports(
+    status_f: Optional[str] = Query(None, alias="status"),
+    user: dict = Depends(require_role("ADMIN", "MANAGER")),
+):
+    """List all projects with metrics so the UI can show report cards.
+    Completed first, then active/paused/pending."""
+    q: dict = {"company_id": user["company_id"]}
+    if status_f:
+        q["status"] = status_f
+    projects = await db.projects.find(q).to_list(500)
+    out = []
+    status_order = {"COMPLETED": 0, "ACTIVE": 1, "PAUSED": 2, "PENDING": 3, "CANCELLED": 4}
+    for p in projects:
+        m = await project_metrics(p["id"])
+        logs = await db.daily_logs.find({"project_id": p["id"]}).to_list(2000)
+        hours_total = sum(float(l.get("hours_worked") or 0) for l in logs)
+        worker_ids = list({l.get("worker_id") for l in logs if l.get("worker_id")})
+        photos_count = m.get("photo_count", 0)
+        out.append({
+            "id": p["id"],
+            "name": p.get("name"),
+            "status": p.get("status"),
+            "client_name": p.get("client_name", ""),
+            "address": p.get("address", ""),
+            "start_date": p.get("start_date"),
+            "end_date": p.get("end_date"),
+            "actual_end_date": p.get("actual_end_date"),
+            "hours_total": round(hours_total, 1),
+            "workers_count": len(worker_ids),
+            "photo_count": photos_count,
+            "log_count": m.get("log_count", 0),
+            "progress_percentage": p.get("progress_percentage", 0),
+            "cover_photo": p.get("cover_photo"),
+        })
+    out.sort(key=lambda x: (status_order.get(x["status"], 9), x.get("actual_end_date") or x.get("end_date") or ""), reverse=False)
+    return out
+
+
+@api.post("/projects/{project_id}/mark-complete")
+async def mark_project_complete(
+    project_id: str,
+    user: dict = Depends(require_role("ADMIN", "MANAGER")),
+):
+    """Marks a project as COMPLETED setting actual_end_date to today."""
+    p = await db.projects.find_one({"id": project_id, "company_id": user["company_id"]})
+    if not p: raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+    await db.projects.update_one(
+        {"id": project_id, "company_id": user["company_id"]},
+        {"$set": {
+            "status": "COMPLETED",
+            "actual_end_date": now_utc().isoformat(),
+            "progress_percentage": 100,
+            "updated_at": now_utc(),
+        }}
+    )
+    p2 = await db.projects.find_one({"id": project_id})
+    return serialize(p2)
+
+
+async def _gather_project_report_data(project_id: str, company_id: str):
+    """Collect all data needed for a premium client project report."""
+    p = await db.projects.find_one({"id": project_id, "company_id": company_id})
+    if not p: return None
+    logs = await db.daily_logs.find({"project_id": project_id, "company_id": company_id}).sort("date", 1).to_list(5000)
+    # attach worker names
+    worker_ids = list({l.get("worker_id") for l in logs if l.get("worker_id")})
+    workers_map: dict = {}
+    if worker_ids:
+        wusers = await db.users.find({"id": {"$in": worker_ids}}, {"_id": 0, "password_hash": 0}).to_list(500)
+        workers_map = {w["id"]: w for w in wusers}
+    entries = await db.material_entries.find({"project_id": project_id, "company_id": company_id}).to_list(5000)
+    for e in entries:
+        m = await db.materials.find_one({"id": e["material_id"]}, {"_id": 0})
+        e["material"] = serialize(m) if m else None
+    photos = await db.photos.find({"project_id": project_id, "company_id": company_id}).sort("created_at", 1).to_list(500)
+    assigned_workers = await db.users.find(
+        {"id": {"$in": p.get("assigned_worker_ids", [])}}, {"_id": 0, "password_hash": 0}
+    ).to_list(100)
+    return {
+        "project": p,
+        "logs": logs,
+        "workers_map": workers_map,
+        "entries": entries,
+        "photos": photos,
+        "assigned_workers": assigned_workers,
+    }
+
+
+def _build_client_project_pdf(company: dict, data: dict, manager_name: str) -> bytes:
+    """Premium PDF for client handoff — no financial data."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.platypus import (
+        BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table,
+        TableStyle, PageBreak, Image as RLImage, KeepTogether,
+    )
+    from reportlab.pdfgen import canvas as _canvas
+    from io import BytesIO
+    import base64 as _b64
+
+    buf = BytesIO()
+    PAGE_W, PAGE_H = A4
+    left = 18 * mm
+    right = 18 * mm
+    top = 20 * mm
+    bottom = 22 * mm
+
+    # ---------- Styles ----------
+    styles = getSampleStyleSheet()
+    DARK = colors.HexColor("#0A0A0A")
+    GOLD = colors.HexColor("#B8924C")
+    LIGHT = colors.HexColor("#F5F5F2")
+    BORDER = colors.HexColor("#D4D4D4")
+    MUTED = colors.HexColor("#525252")
+    st_title = ParagraphStyle("tt", parent=styles["Title"], fontSize=30, leading=34, textColor=DARK, alignment=TA_LEFT, fontName="Helvetica-Bold")
+    st_h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=18, leading=24, textColor=DARK, fontName="Helvetica-Bold", spaceAfter=6)
+    st_h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=13, leading=18, textColor=DARK, fontName="Helvetica-Bold", spaceAfter=4)
+    st_body = ParagraphStyle("b", parent=styles["BodyText"], fontSize=10, leading=14, textColor=DARK)
+    st_cap = ParagraphStyle("cap", parent=styles["BodyText"], fontSize=8.5, leading=11, textColor=MUTED, fontName="Helvetica-Bold")
+    st_cap.letterSpacing = 1.5
+    st_cover_label = ParagraphStyle("cl", parent=styles["BodyText"], fontSize=9, leading=12, textColor=colors.white, fontName="Helvetica-Bold")
+    st_cover_val = ParagraphStyle("cv", parent=styles["BodyText"], fontSize=13, leading=16, textColor=colors.white, fontName="Helvetica")
+    st_center_muted = ParagraphStyle("cm", parent=styles["BodyText"], fontSize=10, leading=14, textColor=MUTED, alignment=TA_CENTER)
+
+    # ---------- Document with custom footer ----------
+    def draw_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(MUTED)
+        footer = f"{company.get('name', 'GLASSWORK')} · Reporte de obra · Página {canvas.getPageNumber()}"
+        canvas.drawString(left, 10 * mm, footer)
+        canvas.drawRightString(PAGE_W - right, 10 * mm, now_utc().strftime("%d/%m/%Y"))
+        canvas.setStrokeColor(BORDER)
+        canvas.setLineWidth(0.3)
+        canvas.line(left, 13 * mm, PAGE_W - right, 13 * mm)
+        canvas.restoreState()
+
+    frame = Frame(left, bottom, PAGE_W - left - right, PAGE_H - top - bottom, id="main", showBoundary=0)
+    doc = BaseDocTemplate(buf, pagesize=A4, leftMargin=left, rightMargin=right, topMargin=top, bottomMargin=bottom)
+    doc.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=draw_footer)])
+
+    p = data["project"]
+    story = []
+
+    # ============================================
+    # COVER (manual draw via canvas on first page)
+    # ============================================
+    def _fmt_date(s: Optional[str]) -> str:
+        if not s: return "—"
+        try:
+            d = datetime.fromisoformat(s.replace("Z", "+00:00")) if isinstance(s, str) else s
+            return d.strftime("%d / %m / %Y")
+        except Exception:
+            return str(s)[:10]
+
+    # Build cover header block (dark band with GOLD accent line)
+    from reportlab.platypus import Flowable
+    class CoverHeader(Flowable):
+        def __init__(self, w, h, company_name: str):
+            super().__init__(); self.w = w; self.h = h; self.cname = company_name
+        def wrap(self, aw, ah): return self.w, self.h
+        def draw(self):
+            c = self.canv
+            c.setFillColor(DARK)
+            c.rect(0, 0, self.w, self.h, fill=1, stroke=0)
+            # Gold accent line
+            c.setFillColor(GOLD)
+            c.rect(0, self.h / 2 - 1, self.w, 2, fill=1, stroke=0)
+            # Mono G
+            box = 22
+            c.setFillColor(colors.white)
+            c.rect(14, self.h - 44, box, box, fill=1, stroke=0)
+            c.setFillColor(DARK)
+            c.setFont("Helvetica-Bold", 16)
+            c.drawCentredString(14 + box / 2, self.h - 44 + 6, "G")
+            # Company name
+            c.setFillColor(colors.white)
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(44, self.h - 30, "GLASSWORK")
+            c.setFont("Helvetica", 9)
+            c.drawString(44, self.h - 42, self.cname[:50])
+            # Right-aligned label
+            c.setFillColor(GOLD)
+            c.setFont("Helvetica-Bold", 9)
+            c.drawRightString(self.w - 12, self.h - 30, "REPORTE DE OBRA")
+            c.setFillColor(colors.white)
+            c.setFont("Helvetica", 8.5)
+            c.drawRightString(self.w - 12, self.h - 42, "Certificado de obra finalizada")
+
+    cw = PAGE_W - left - right
+    story.append(CoverHeader(cw, 80, company.get("name", "GLASSWORK")))
+    story.append(Spacer(1, 28))
+    story.append(Paragraph(p.get("name", "Obra"), st_title))
+    story.append(Spacer(1, 4))
+    if p.get("address"):
+        story.append(Paragraph(p.get("address"), st_body))
+    story.append(Spacer(1, 24))
+
+    # Client block (boxed)
+    client_rows = [
+        [Paragraph("CLIENTE", st_cap), Paragraph(p.get("client_name", "—") or "—", st_h2)],
+    ]
+    if p.get("client_phone"):
+        client_rows.append([Paragraph("TELÉFONO", st_cap), Paragraph(p.get("client_phone"), st_body)])
+    if p.get("client_email"):
+        client_rows.append([Paragraph("EMAIL", st_cap), Paragraph(p.get("client_email"), st_body)])
+    ct = Table(client_rows, colWidths=[28 * mm, cw - 28 * mm])
+    ct.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEBEFORE", (0, 0), (0, -1), 2, GOLD),
+    ]))
+    story.append(ct)
+    story.append(Spacer(1, 16))
+
+    # Dates block
+    date_cells = [
+        [Paragraph("INICIO DE OBRA", st_cap), Paragraph("FINALIZACIÓN", st_cap), Paragraph("ESTADO", st_cap)],
+        [
+            Paragraph(_fmt_date(p.get("start_date")), st_h2),
+            Paragraph(_fmt_date(p.get("actual_end_date") or p.get("end_date")), st_h2),
+            Paragraph("COMPLETADA" if p.get("status") == "COMPLETED" else "EN CURSO", st_h2),
+        ],
+    ]
+    dt = Table(date_cells, colWidths=[cw / 3] * 3)
+    dt.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), LIGHT),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.white),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDER),
+    ]))
+    story.append(dt)
+
+    story.append(PageBreak())
+
+    # ============================================
+    # PAGE 2: EXECUTIVE SUMMARY + DESCRIPTION
+    # ============================================
+    story.append(Paragraph("Resumen ejecutivo", st_h1))
+    story.append(Paragraph("Datos globales de la obra realizada.", st_body))
+    story.append(Spacer(1, 10))
+
+    hours_total = sum(float(l.get("hours_worked") or 0) for l in data["logs"])
+    worker_ids = list({l.get("worker_id") for l in data["logs"] if l.get("worker_id")})
+    incidents = sum(1 for l in data["logs"] if (l.get("has_incident")))
+    try:
+        days = 0
+        if p.get("start_date"):
+            sd = datetime.fromisoformat((p["start_date"] or "").replace("Z", "+00:00"))
+            ed_raw = p.get("actual_end_date") or p.get("end_date")
+            ed = datetime.fromisoformat((ed_raw or "").replace("Z", "+00:00")) if ed_raw else now_utc()
+            days = max((ed - sd).days, 0)
+    except Exception:
+        days = 0
+
+    kpi_cells = [
+        [Paragraph("DURACIÓN", st_cap), Paragraph("HORAS TRABAJADAS", st_cap), Paragraph("OPERARIOS", st_cap), Paragraph("FOTOS", st_cap)],
+        [
+            Paragraph(f"{days}<font size=9> días</font>", st_h1),
+            Paragraph(f"{hours_total:g}<font size=9> h</font>", st_h1),
+            Paragraph(str(len(worker_ids)), st_h1),
+            Paragraph(str(len(data["photos"])), st_h1),
+        ],
+    ]
+    kt = Table(kpi_cells, colWidths=[cw / 4] * 4)
+    kt.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDER),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.white),
+    ]))
+    story.append(kt)
+    story.append(Spacer(1, 16))
+
+    if p.get("description"):
+        story.append(Paragraph("Descripción", st_h2))
+        story.append(Paragraph(p.get("description", "").replace("\n", "<br/>"), st_body))
+        story.append(Spacer(1, 12))
+
+    # ============================================
+    # TEAM
+    # ============================================
+    if data["assigned_workers"] or worker_ids:
+        story.append(Paragraph("Equipo que intervino", st_h2))
+        # Build rows: name + hours
+        hours_by = {}
+        for l in data["logs"]:
+            wid = l.get("worker_id")
+            if wid: hours_by[wid] = hours_by.get(wid, 0) + float(l.get("hours_worked") or 0)
+        # Include assigned workers even if 0 hours
+        aw_ids = {w["id"] for w in data["assigned_workers"]}
+        all_ids = aw_ids.union(hours_by.keys())
+        name_map = {w["id"]: w.get("name", "—") for w in data["assigned_workers"]}
+        name_map.update({wid: (data["workers_map"].get(wid) or {}).get("name", "—") for wid in hours_by.keys()})
+        rows = [["Operario", "Horas totales"]]
+        for wid in sorted(all_ids, key=lambda x: -hours_by.get(x, 0)):
+            rows.append([name_map.get(wid, "—"), f"{hours_by.get(wid, 0):g} h"])
+        tt = Table(rows, colWidths=[cw * 0.7, cw * 0.3])
+        tt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), DARK),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDER),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFAF8")]),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ]))
+        story.append(tt)
+        story.append(Spacer(1, 14))
+
+    # ============================================
+    # MATERIALS USED (no prices)
+    # ============================================
+    if data["entries"]:
+        story.append(Paragraph("Materiales utilizados", st_h2))
+        used_only = [e for e in data["entries"] if e.get("entry_type") in (None, "USAGE")]
+        if not used_only: used_only = data["entries"]
+        by_mat: dict = {}
+        for e in used_only:
+            mat = e.get("material") or {}
+            key = mat.get("id") or mat.get("name", "?")
+            if key not in by_mat:
+                by_mat[key] = {"name": mat.get("name", "—"), "unit": mat.get("unit", ""), "category": mat.get("category", ""), "qty": 0.0}
+            by_mat[key]["qty"] += float(e.get("quantity") or 0)
+        rows = [["Material", "Categoría", "Cantidad"]]
+        for v in sorted(by_mat.values(), key=lambda x: -x["qty"]):
+            rows.append([v["name"][:60], v["category"], f"{v['qty']:g} {v['unit']}"])
+        mt = Table(rows, colWidths=[cw * 0.5, cw * 0.25, cw * 0.25])
+        mt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), DARK),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDER),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFAF8")]),
+            ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ]))
+        story.append(mt)
+
+    # ============================================
+    # PHOTO GALLERY (new page)
+    # ============================================
+    def _photo_flowable(b64: str, w: float, h: float):
+        try:
+            if not b64: return None
+            raw = _b64.b64decode(b64)
+            return RLImage(BytesIO(raw), width=w, height=h, kind="proportional")
+        except Exception:
+            return None
+
+    photos_by_type = {}
+    for ph in data["photos"]:
+        t = ph.get("type") or "PROGRESS"
+        photos_by_type.setdefault(t, []).append(ph)
+    labels = [
+        ("BEFORE", "Antes"),
+        ("PROGRESS", "Durante"),
+        ("AFTER", "Después"),
+        ("INCIDENT", "Incidentes"),
+        ("MATERIAL", "Material"),
+        ("MEASUREMENT", "Medidas"),
+    ]
+    any_photo = any(photos_by_type.get(k) for k, _ in labels)
+    if any_photo:
+        story.append(PageBreak())
+        story.append(Paragraph("Galería fotográfica", st_h1))
+        story.append(Paragraph("Documentación visual de la obra.", st_body))
+        story.append(Spacer(1, 10))
+        cell_w = (cw - 8) / 2
+        cell_h = cell_w * 0.72
+        for key, label in labels:
+            items = photos_by_type.get(key) or []
+            if not items: continue
+            story.append(Paragraph(label.upper(), st_cap))
+            story.append(Spacer(1, 4))
+            # Render 2 columns
+            pairs = []
+            row: list = []
+            for ph in items[:12]:
+                imgf = _photo_flowable(ph.get("base64") or ph.get("data", ""), cell_w, cell_h)
+                row.append(imgf if imgf else Paragraph("(imagen no disponible)", st_center_muted))
+                if len(row) == 2:
+                    pairs.append(row); row = []
+            if row:
+                while len(row) < 2: row.append("")
+                pairs.append(row)
+            if pairs:
+                gt = Table(pairs, colWidths=[cell_w, cell_w], rowHeights=[cell_h] * len(pairs))
+                gt.setStyle(TableStyle([
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]))
+                story.append(gt)
+            story.append(Spacer(1, 8))
+
+    # ============================================
+    # SIGNATURE
+    # ============================================
+    story.append(Spacer(1, 22))
+    story.append(Paragraph("Certificación", st_h1))
+    story.append(Paragraph(
+        f"Certificamos que la obra <b>{p.get('name', '')}</b> ubicada en "
+        f"<b>{p.get('address', '—')}</b> ha sido ejecutada y finalizada conforme a lo acordado con el cliente "
+        f"<b>{p.get('client_name', '—')}</b>.",
+        st_body,
+    ))
+    story.append(Spacer(1, 18))
+    sign_cells = [
+        [Paragraph("RESPONSABLE", st_cap), Paragraph("FECHA DE CERTIFICACIÓN", st_cap)],
+        [Paragraph(manager_name or "—", st_h2), Paragraph(now_utc().strftime("%d / %m / %Y"), st_h2)],
+        [Paragraph(f"<i>{company.get('name', 'GLASSWORK')}</i>", st_body), Paragraph("<i>Firma digital verificada</i>", st_body)],
+    ]
+    sg = Table(sign_cells, colWidths=[cw / 2, cw / 2])
+    sg.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), LIGHT),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12), ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDER),
+        ("LINEBEFORE", (0, 0), (0, -1), 2, GOLD),
+    ]))
+    story.append(sg)
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+@api.get("/projects/{project_id}/client-report/pdf")
+async def client_project_report_pdf(
+    project_id: str,
+    user: dict = Depends(require_role("ADMIN", "MANAGER")),
+):
+    """Generate a premium PDF report of a project to share with the client. No financial data."""
+    company = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0}) or {}
+    data = await _gather_project_report_data(project_id, user["company_id"])
+    if not data:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+    manager_name = user.get("name", "")
+    pdf = _build_client_project_pdf(company, data, manager_name)
+    import base64 as _b64
+    proj = data["project"]
+    safe_name = "".join(c for c in proj.get("name", "obra") if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_") or "obra"
+    return {
+        "filename": f"glasswork_reporte_{safe_name}_{now_utc().strftime('%Y%m%d')}.pdf",
+        "mime": "application/pdf",
+        "base64": _b64.b64encode(pdf).decode("ascii"),
+    }
+
+
+
+# =========================================================
 # WAREHOUSE — lots, zones, movements, label printing
 # =========================================================
 LotStatus = Literal["IN_STOCK", "PARTIAL", "DEPLETED"]

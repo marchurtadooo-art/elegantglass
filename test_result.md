@@ -108,6 +108,20 @@ user_problem_statement: |
   bloqueado, CameraView con children, Zonas QR sin auth en <Image>).
 
 backend:
+  - task: "Client report endpoints (GET /api/reports/projects, POST /api/projects/{id}/mark-complete, GET /api/projects/{id}/client-report/pdf)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Nuevos endpoints añadidos en esta sesión para generar un reporte premium de obra por cliente. /reports/projects lista proyectos con métricas; /projects/{id}/mark-complete marca obra como completada con actual_end_date=hoy y progreso 100; /projects/{id}/client-report/pdf devuelve PDF base64 sin datos financieros (solo ADMIN/MANAGER)."
+        -working: true
+        -agent: "testing"
+        -comment: "Validado vía /app/backend_test.py contra https://site-glass-preview.preview.emergentagent.com/api. 10/10 casos pasan. (1) GET /api/reports/projects admin → 200 con 4 proyectos; todos los items tienen id, name, status, client_name, address, hours_total, workers_count, photo_count, log_count, start_date, end_date. Orden correcto: ACTIVE, ACTIVE, PAUSED, PENDING (COMPLETED primero si existiera). (2) POST /api/projects/{id}/mark-complete sobre 'Reforma Hotel Son Vida' (ACTIVE) → 200 con status='COMPLETED', actual_end_date=2026-04-30T07:48:31+00:00, progress_percentage=100. (3) GET /api/projects/{completed_id}/client-report/pdf → 200 con {filename:'glasswork_reporte_Reforma_Hotel_Son_Vida_20260430.pdf', mime:'application/pdf', base64}; base64 decodifica a 6063 bytes que comienzan con '%PDF-'. (4) /projects/nonexistent-xyz-999/client-report/pdf con admin → 404. (5) /reports/projects sin token → 401. (6) /reports/projects con worker (carlos@elegantglass.es) → 403. Verificación de fuga financiera: descomprimí los streams FlateDecode del PDF y busqué 'unit_price', 'budget', 'total_cost' (además de 'presupuesto', 'coste', 'precio', 'gastado', '€', 'eur') — NINGUNO aparece en el contenido del PDF. Sin fuga de datos financieros. Todos los criterios del review pasan."
   - task: "Endpoint /api/warehouse/zones/{zid}/qr-base64 (nuevo)"
     implemented: true
     working: true
@@ -201,9 +215,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Endpoint /api/warehouse/zones/{zid}/qr-base64 (nuevo)"
-    - "Zones QR image auth fix"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -213,3 +225,5 @@ agent_communication:
     -message: "Cambios de esta sesión: (1) FAB QR global añadido en ambos roles. (2) Imagen del login actualizada al asset que envió el usuario. (3) Bug del onboarding 'Siguiente' arreglado reemplazando FlatList por render condicional + Animated fade. (4) CameraView ya no tiene children. (5) Nuevo endpoint /api/warehouse/zones/{zid}/qr-base64 para obtener QR de zona con auth. Por favor testea SOLO el nuevo endpoint con admin (jefe@elegantglass.es / Admin1234!) y verifica que (a) responde 200 con {filename,mime,base64,qr_code}, (b) responde 401 sin token, (c) responde 404 con zid inválido. NO testear endpoints ya verificados."
     -agent: "testing"
     -message: "Endpoint GET /api/warehouse/zones/{zid}/qr-base64 verificado con backend_test.py. Resultados: login admin OK, list zones devuelve 4 zonas, GET con token válido → 200 con {filename, mime:'image/png', base64 (PNG válido — magic 89 50 4E 47), qr_code}, GET sin token → 401, GET con id inexistente → 404. Todos los criterios del review request pasan. No se testearon otros endpoints según instrucción explícita."
+    -agent: "testing"
+    -message: "Client-report endpoints (nuevos) verificados con backend_test.py. 10/10 casos pasan. (1) GET /api/reports/projects (admin) → 200 con 4 proyectos, todos los campos requeridos presentes (id, name, status, client_name, address, hours_total, workers_count, photo_count, log_count, start_date, end_date), orden correcto ACTIVE→PAUSED→PENDING. (2) POST /api/projects/{id}/mark-complete sobre proyecto ACTIVE 'Reforma Hotel Son Vida' → 200 con status=COMPLETED, actual_end_date seteada a hoy, progress_percentage=100. (3) GET /api/projects/{completed_id}/client-report/pdf → 200 con JSON {filename, mime:application/pdf, base64}; decodifica a 6063 bytes con firma %PDF- válida. (4) /projects/nonexistent-xyz-999/client-report/pdf → 404. (5) /reports/projects sin token → 401. (6) /reports/projects con worker (carlos@elegantglass.es) → 403. Fuga financiera: descomprimí los streams FlateDecode del PDF y busqué 'unit_price', 'budget', 'total_cost' (y términos adicionales como 'presupuesto', 'coste', 'precio', 'gastado', '€', 'eur') — ninguno aparece. Sin fuga de datos financieros. Todos los criterios del review pasan."
