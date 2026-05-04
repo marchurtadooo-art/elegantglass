@@ -147,6 +147,20 @@ backend:
         -working: true
         -agent: "main"
         -comment: "No se modificaron endpoints existentes en esta sesión, solo se agregó uno nuevo."
+  - task: "POST /api/warehouse/assign-and-print (clasificación automática + impresión ESC/POS)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Nuevo endpoint que identifica lote, busca zona de misma categoría, asigna primera Fila con <6 lotes, persiste zone_id+row_label, crea movimiento LOCATE con 'Clasificación automática', construye bytes ESC/POS y envía por TCP a PRINTER_IP:9100. Si PRINTER_IP está vacío devuelve 200 con printed=false, printer_configured=false (no lanza 503)."
+        -working: true
+        -agent: "testing"
+        -comment: "Verificado con /app/backend_test.py — 25/25 aserciones pasan contra https://site-glass-preview.preview.emergentagent.com/api con admin jefe@elegantglass.es. (1) Login OK, lot_code seleccionado EG-2026-0001. (2) POST /api/warehouse/assign-and-print → 200 con ok=true, lot.lot_code='EG-2026-0001', material.category='PERFILERIA', zone.name='Zona A — Perfilería', zone.category='PERFILERIA', row_label='Fila 1', print.printed=false, print.printer_configured=false, print.bytes=304 (ESC/POS construido), print.message string español. (3) Idempotencia: segunda POST → 200, misma zona y Fila 1, relocated=false. (4) lot_code inexistente → 404 'Lote no encontrado'. (5) Sin token → 401 'Not authenticated'. (6) zone.category == material.category estrictamente (PERFILERIA == PERFILERIA). (7) Persistencia: GET /api/warehouse/lots/EG-2026-0001 retorna lot.zone.name y lot.row_label idénticos a los de la respuesta. (8) movements incluye 3 entradas LOCATE, al menos una con nota 'Clasificación automática → Zona A — Perfilería · Fila 1'. Todo OK; PRINTER_IP no configurado en este entorno y el endpoint lo maneja correctamente devolviendo 200."
 
 frontend:
   - task: "Onboarding Siguiente bug fix (P0)"
@@ -227,3 +241,5 @@ agent_communication:
     -message: "Endpoint GET /api/warehouse/zones/{zid}/qr-base64 verificado con backend_test.py. Resultados: login admin OK, list zones devuelve 4 zonas, GET con token válido → 200 con {filename, mime:'image/png', base64 (PNG válido — magic 89 50 4E 47), qr_code}, GET sin token → 401, GET con id inexistente → 404. Todos los criterios del review request pasan. No se testearon otros endpoints según instrucción explícita."
     -agent: "testing"
     -message: "Client-report endpoints (nuevos) verificados con backend_test.py. 10/10 casos pasan. (1) GET /api/reports/projects (admin) → 200 con 4 proyectos, todos los campos requeridos presentes (id, name, status, client_name, address, hours_total, workers_count, photo_count, log_count, start_date, end_date), orden correcto ACTIVE→PAUSED→PENDING. (2) POST /api/projects/{id}/mark-complete sobre proyecto ACTIVE 'Reforma Hotel Son Vida' → 200 con status=COMPLETED, actual_end_date seteada a hoy, progress_percentage=100. (3) GET /api/projects/{completed_id}/client-report/pdf → 200 con JSON {filename, mime:application/pdf, base64}; decodifica a 6063 bytes con firma %PDF- válida. (4) /projects/nonexistent-xyz-999/client-report/pdf → 404. (5) /reports/projects sin token → 401. (6) /reports/projects con worker (carlos@elegantglass.es) → 403. Fuga financiera: descomprimí los streams FlateDecode del PDF y busqué 'unit_price', 'budget', 'total_cost' (y términos adicionales como 'presupuesto', 'coste', 'precio', 'gastado', '€', 'eur') — ninguno aparece. Sin fuga de datos financieros. Todos los criterios del review pasan."
+    -agent: "testing"
+    -message: "POST /api/warehouse/assign-and-print verificado con /app/backend_test.py — 25/25 aserciones pasan. Admin jefe@elegantglass.es, lot EG-2026-0001 (material PERFILERIA). Respuesta 200 con ok=true, material.category=PERFILERIA, zone.name='Zona A — Perfilería', zone.category=PERFILERIA (igualdad estricta con material.category), row_label='Fila 1', print.bytes=304, print.printed=false, print.printer_configured=false (PRINTER_IP vacío, el endpoint maneja correctamente devolviendo 200 en lugar de 503). Idempotencia OK: 2.ª llamada devuelve misma zona/Fila 1 con relocated=false. 404 para lot_code inexistente; 401 sin token. Persistencia confirmada en GET /api/warehouse/lots/EG-2026-0001 (zone.name y row_label coinciden). movements[] incluye 3 entradas LOCATE, al menos una con nota 'Clasificación automática → Zona A — Perfilería · Fila 1'. Ningún otro endpoint retesteado por instrucción explícita."

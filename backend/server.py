@@ -2239,6 +2239,167 @@ async def warehouse_print(lot_code: str, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=503, detail=f"No se pudo conectar a la impresora ({printer_ip}:{printer_port}): {e}")
 
 
+async def _try_send_escpos(payload: bytes) -> dict:
+    """Try to send ESC/POS payload to the thermal printer. Returns {printed, message}.
+    Never raises — if printer is not reachable we report printed=false gracefully."""
+    printer_ip = os.environ.get("PRINTER_IP", "").strip()
+    printer_port = int(os.environ.get("PRINTER_PORT", "9100") or 9100)
+    if not printer_ip:
+        return {
+            "printed": False,
+            "printer_configured": False,
+            "message": "Impresora no configurada aún. La etiqueta se ha generado y está lista para imprimir cuando conectes la impresora (PRINTER_IP).",
+            "bytes": len(payload),
+        }
+    import socket as _socket
+    try:
+        with _socket.create_connection((printer_ip, printer_port), timeout=4) as s:
+            s.sendall(payload)
+        return {
+            "printed": True,
+            "printer_configured": True,
+            "message": f"Etiqueta enviada a la impresora {printer_ip}.",
+            "bytes": len(payload),
+        }
+    except Exception as e:
+        return {
+            "printed": False,
+            "printer_configured": True,
+            "message": f"No se pudo conectar a la impresora ({printer_ip}:{printer_port}): {e}",
+            "bytes": len(payload),
+        }
+
+
+class AssignAndPrintIn(BaseModel):
+    lot_code: str
+
+
+@api.post("/warehouse/assign-and-print")
+async def warehouse_assign_and_print(
+    body: AssignAndPrintIn,
+    user: dict = Depends(get_current_user),
+):
+    """Automatic classification + print flow.
+
+    1. Identify the lot and its material category.
+    2. Find the first storage zone whose category matches the material's.
+    3. Assign the first row with available capacity (<= 6 lots per row).
+    4. Persist the zone_id + row_label on the lot and record a LOCATE movement.
+    5. Build an ESC/POS payload and try to send it to the thermal printer. If
+       PRINTER_IP is not configured (or unreachable), we still return 200 with
+       printed=false so the UI can show "etiqueta preparada, imprimir luego".
+    """
+    lot = await db.material_lots.find_one({"lot_code": body.lot_code, "company_id": user["company_id"]})
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+    mat = await db.materials.find_one({"id": lot["material_id"]}, {"_id": 0}) or {}
+    category = mat.get("category")
+    if not category:
+        raise HTTPException(status_code=422, detail="El material del lote no tiene categoría, no se puede clasificar.")
+
+    # 1) Find matching zone — prefer zones with available capacity
+    zones = await db.storage_zones.find(
+        {"company_id": user["company_id"], "category": category}
+    ).sort("name", 1).to_list(200)
+    if not zones:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No hay ninguna zona configurada para la categoría {category}. Crea una zona en Almacén > Zonas primero.",
+        )
+
+    # Config — max lots per row inside a zone
+    MAX_PER_ROW = int(os.environ.get("WAREHOUSE_MAX_PER_ROW", "6") or 6)
+
+    chosen_zone = None
+    chosen_row = None
+    for z in zones:
+        row_count = int(z.get("row_count") or 10)
+        # Count lots already located in each row of this zone (excluding depleted)
+        lots_in_zone = await db.material_lots.find({
+            "company_id": user["company_id"],
+            "zone_id": z["id"],
+            "status": {"$ne": "DEPLETED"},
+            "id": {"$ne": lot["id"]},  # exclude current lot so re-scanning keeps its slot
+        }, {"row_label": 1}).to_list(2000)
+        row_counts: dict = {}
+        for existing in lots_in_zone:
+            rl = (existing.get("row_label") or "").strip()
+            if rl:
+                row_counts[rl] = row_counts.get(rl, 0) + 1
+        # Walk rows in order Fila 1 … Fila N and pick the first with capacity
+        for i in range(1, row_count + 1):
+            rl = f"Fila {i}"
+            if row_counts.get(rl, 0) < MAX_PER_ROW:
+                chosen_zone = z
+                chosen_row = rl
+                break
+        if chosen_zone:
+            break
+
+    if not chosen_zone:
+        # All zones for this category are full → fall back to first zone, row 1
+        chosen_zone = zones[0]
+        chosen_row = "Fila 1"
+
+    # 2) Persist assignment
+    previous_zone = lot.get("zone_id")
+    await db.material_lots.update_one(
+        {"id": lot["id"]},
+        {"$set": {
+            "zone_id": chosen_zone["id"],
+            "row_label": chosen_row,
+            "updated_at": now_utc(),
+        }},
+    )
+
+    # 3) Record LOCATE movement
+    mv = {
+        "id": str(uuid.uuid4()),
+        "company_id": user["company_id"],
+        "lot_id": lot["id"],
+        "type": "LOCATE",
+        "quantity": None,
+        "worker_id": user["id"],
+        "worker_name": user.get("name"),
+        "project_id": None,
+        "project_name": None,
+        "timestamp": now_utc(),
+        "note": (
+            f"Clasificación automática → {chosen_zone['name']} · {chosen_row}"
+            + (" (reubicado)" if previous_zone and previous_zone != chosen_zone["id"] else "")
+        ),
+    }
+    await db.lot_movements.insert_one(mv.copy())
+
+    # 4) Build ESC/POS and try print
+    lot_reloaded = await db.material_lots.find_one({"id": lot["id"]}, {"_id": 0})
+    payload = _build_escpos_bytes(lot_reloaded or lot, mat, chosen_zone["name"])
+    print_result = await _try_send_escpos(payload)
+
+    return {
+        "ok": True,
+        "lot": {
+            "id": lot["id"],
+            "lot_code": lot["lot_code"],
+            "quantity_left": lot.get("quantity_left"),
+        },
+        "material": {
+            "id": mat.get("id"),
+            "name": mat.get("name"),
+            "category": category,
+            "unit": mat.get("unit"),
+        },
+        "zone": {
+            "id": chosen_zone["id"],
+            "name": chosen_zone["name"],
+            "category": chosen_zone["category"],
+        },
+        "row_label": chosen_row,
+        "relocated": bool(previous_zone and previous_zone != chosen_zone["id"]),
+        "print": print_result,
+    }
+
+
 # =========================================================
 # Health
 # =========================================================
