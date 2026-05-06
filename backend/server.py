@@ -23,6 +23,24 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 
+from security import (
+    SecurityHeadersMiddleware,
+    ensure_security_indices,
+    cleanup_expired_security_records,
+    is_login_blocked,
+    record_login_attempt,
+    reset_login_attempts,
+    register_session,
+    touch_session,
+    is_session_idle,
+    blacklist_token,
+    is_token_blacklisted,
+    audit_log,
+    get_client_ip,
+    SESSION_IDLE_MINUTES,
+    LOGIN_BLOCK_MINUTES,
+)
+
 # ---------- Logging ----------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("glasswork")
@@ -77,8 +95,11 @@ def create_token(payload: dict, expires_delta: timedelta) -> str:
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGO)
 
 
-def create_access_token(user_id: str, role: str, company_id: str) -> str:
-    return create_token({"sub": user_id, "role": role, "cid": company_id, "type": "access"}, timedelta(minutes=ACCESS_MIN))
+def create_access_token(user_id: str, role: str, company_id: str, jti: Optional[str] = None) -> str:
+    payload = {"sub": user_id, "role": role, "cid": company_id, "type": "access"}
+    if jti:
+        payload["jti"] = jti
+    return create_token(payload, timedelta(minutes=ACCESS_MIN))
 
 
 def create_refresh_token(user_id: str) -> str:
@@ -106,16 +127,41 @@ def serialize(doc: dict) -> dict:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
     if credentials is None or not credentials.credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = decode_token(credentials.credentials)
+    token = credentials.credentials
+    payload = decode_token(token)
     if payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid token type")
+
+    # Security layer: token blacklist (logged out tokens)
+    if await is_token_blacklisted(db, token):
+        raise HTTPException(status_code=401, detail="Token revocado, inicia sesión de nuevo")
+
+    # Security layer: session inactivity (>30min idle)
+    jti = payload.get("jti")
+    if jti:
+        session = await touch_session(db, jti)
+        if session is not None:
+            idle, _mins = await is_session_idle(session)
+            if idle:
+                # Idle timeout — blacklist this token & require new login
+                await db.token_sessions.delete_one({"jti": jti})
+                await blacklist_token(db, token, jti, None)
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Sesión expirada por inactividad ({SESSION_IDLE_MINUTES} min). Inicia sesión de nuevo.",
+                )
+
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    # Stash the raw token + jti so endpoints can blacklist on logout / audit
+    request.state.access_token = token
+    request.state.access_jti = jti
     return user
 
 
@@ -312,28 +358,75 @@ async def register(body: RegisterIn):
 
 
 @api.post("/auth/login", response_model=TokenOut)
-async def login(body: LoginIn):
+async def login(body: LoginIn, request: Request):
     email = body.email.lower().strip()
+    ip = get_client_ip(request)
+
+    # 1) Lockout check — 5 fails in 15 min
+    blocked, remaining = await is_login_blocked(db, email)
+    if blocked:
+        await audit_log(
+            db, action="LOGIN_BLOCKED", resource="auth", request=request,
+            user_email=email, success=False,
+            extra={"remaining_minutes": remaining},
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos, espera {remaining} minutos",
+        )
+
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user["password_hash"]):
+        # Record failed attempt + audit
+        await record_login_attempt(db, email, ip, success=False)
+        await audit_log(
+            db, action="LOGIN_FAILED", resource="auth", request=request,
+            user_email=email, success=False,
+        )
+        # Re-check lockout to inform user precisely
+        blocked2, remaining2 = await is_login_blocked(db, email)
+        if blocked2:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Demasiados intentos, espera {remaining2} minutos",
+            )
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     if not user.get("is_active", True):
+        await audit_log(
+            db, action="LOGIN_FAILED", resource="auth", request=request,
+            user=user, success=False, extra={"reason": "account_disabled"},
+        )
         raise HTTPException(status_code=403, detail="Cuenta desactivada")
-    access = create_access_token(user["id"], user["role"], user["company_id"])
+
+    # Successful login → issue tokens with jti, register session, reset failures
+    jti = str(uuid.uuid4())
+    access = create_access_token(user["id"], user["role"], user["company_id"], jti=jti)
     refresh = create_refresh_token(user["id"])
+    exp_dt = now_utc() + timedelta(minutes=ACCESS_MIN)
+    await register_session(db, jti, user["id"], exp_dt, ip)
+    await record_login_attempt(db, email, ip, success=True)
+    await reset_login_attempts(db, email)
+    await audit_log(
+        db, action="LOGIN", resource="auth", request=request,
+        user=user, success=True, extra={"jti": jti},
+    )
+
     user_out = {k: v for k, v in user.items() if k not in ("_id", "password_hash")}
     return TokenOut(access_token=access, refresh_token=refresh, user=serialize(user_out))
 
 
 @api.post("/auth/refresh")
-async def refresh_token(body: RefreshIn):
+async def refresh_token(body: RefreshIn, request: Request):
     payload = decode_token(body.refresh_token)
     if payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid token type")
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    access = create_access_token(user["id"], user["role"], user["company_id"])
+    jti = str(uuid.uuid4())
+    access = create_access_token(user["id"], user["role"], user["company_id"], jti=jti)
+    exp_dt = now_utc() + timedelta(minutes=ACCESS_MIN)
+    await register_session(db, jti, user["id"], exp_dt, get_client_ip(request))
     return {"access_token": access}
 
 
@@ -343,7 +436,17 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 @api.post("/auth/logout")
-async def logout(user: dict = Depends(get_current_user)):
+async def logout(request: Request, user: dict = Depends(get_current_user)):
+    # Blacklist the access token used for this request
+    token = getattr(request.state, "access_token", None)
+    jti = getattr(request.state, "access_jti", None)
+    if token:
+        # We use ACCESS_MIN as expiry estimate; the entry will be cleaned up on startup
+        await blacklist_token(db, token, jti, now_utc() + timedelta(minutes=ACCESS_MIN))
+    await audit_log(
+        db, action="LOGOUT", resource="auth", request=request,
+        user=user, success=True, extra={"jti": jti},
+    )
     return {"ok": True}
 
 
@@ -390,11 +493,23 @@ async def create_user(body: UserCreate, user: dict = Depends(require_role("ADMIN
 
 
 @api.patch("/users/{user_id}")
-async def update_user(user_id: str, body: UserUpdate, user: dict = Depends(require_role("ADMIN"))):
+async def update_user(request: Request, user_id: str, body: UserUpdate, user: dict = Depends(require_role("ADMIN"))):
+    prev = await db.users.find_one({"id": user_id, "company_id": user["company_id"]}, {"_id": 0, "password_hash": 0})
     upd = {k: v for k, v in body.dict().items() if v is not None}
     upd["updated_at"] = now_utc()
     await db.users.update_one({"id": user_id, "company_id": user["company_id"]}, {"$set": upd})
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    # Audit role change specifically
+    if prev and "role" in upd and (prev.get("role") != upd.get("role")):
+        await audit_log(
+            db, action="USER_ROLE_CHANGE", resource="user", resource_id=user_id,
+            request=request, user=user,
+            extra={
+                "target_email": prev.get("email"),
+                "previous_role": prev.get("role"),
+                "new_role": upd.get("role"),
+            },
+        )
     return serialize(u)
 
 
@@ -463,7 +578,7 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
 
 
 @api.post("/projects")
-async def create_project(body: ProjectIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+async def create_project(request: Request, body: ProjectIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
     pid = str(uuid.uuid4())
     proj = {
         "id": pid,
@@ -474,6 +589,10 @@ async def create_project(body: ProjectIn, user: dict = Depends(require_role("ADM
         **body.dict(),
     }
     await db.projects.insert_one(proj.copy())
+    await audit_log(
+        db, action="PROJECT_CREATE", resource="project", resource_id=pid,
+        request=request, user=user, extra={"name": proj.get("name")},
+    )
     return serialize(proj)
 
 
@@ -491,8 +610,13 @@ async def update_project(
 
 
 @api.delete("/projects/{project_id}")
-async def delete_project(project_id: str, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+async def delete_project(request: Request, project_id: str, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+    proj = await db.projects.find_one({"id": project_id, "company_id": user["company_id"]}, {"_id": 0, "name": 1})
     await db.projects.delete_one({"id": project_id, "company_id": user["company_id"]})
+    await audit_log(
+        db, action="PROJECT_DELETE", resource="project", resource_id=project_id,
+        request=request, user=user, extra={"name": (proj or {}).get("name")},
+    )
     return {"ok": True}
 
 
@@ -1828,7 +1952,7 @@ async def warehouse_zone_qr_b64(zid: str, user: dict = Depends(get_current_user)
 
 
 @api.post("/warehouse/lots")
-async def warehouse_create_lot(body: LotCreateIn, user: dict = Depends(get_current_user)):
+async def warehouse_create_lot(request: Request, body: LotCreateIn, user: dict = Depends(get_current_user)):
     mat = await db.materials.find_one({"id": body.material_id, "company_id": user["company_id"]})
     if not mat: raise HTTPException(status_code=404, detail="Material no encontrado")
     code = await _next_lot_code()
@@ -1867,6 +1991,11 @@ async def warehouse_create_lot(body: LotCreateIn, user: dict = Depends(get_curre
     out["material"] = serialize(mat)
     if user["role"] == "WORKER":
         out["unit_price"] = None
+    await audit_log(
+        db, action="WAREHOUSE_MOVE_INBOUND", resource="lot", resource_id=lot["id"],
+        request=request, user=user,
+        extra={"lot_code": code, "quantity": body.quantity, "material_id": body.material_id},
+    )
     return out
 
 
@@ -1922,7 +2051,7 @@ async def warehouse_lot_detail(lot_code: str, user: dict = Depends(get_current_u
 
 
 @api.post("/warehouse/lots/{lot_code}/locate")
-async def warehouse_locate(lot_code: str, body: LocateIn, user: dict = Depends(get_current_user)):
+async def warehouse_locate(request: Request, lot_code: str, body: LocateIn, user: dict = Depends(get_current_user)):
     lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
     if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
     z = await db.storage_zones.find_one({"id": body.zone_id, "company_id": user["company_id"]})
@@ -1933,11 +2062,16 @@ async def warehouse_locate(lot_code: str, body: LocateIn, user: dict = Depends(g
         "type": "LOCATE", "quantity": 0, "project_id": None, "worker_id": user["id"],
         "timestamp": now_utc(), "note": f"Zona {z['name']} {body.row_label or ''}".strip(),
     })
+    await audit_log(
+        db, action="WAREHOUSE_MOVE_LOCATE", resource="lot", resource_id=lot["id"],
+        request=request, user=user,
+        extra={"lot_code": lot_code, "zone": z.get("name"), "row_label": body.row_label or ""},
+    )
     return {"ok": True, "zone": z["name"], "row": body.row_label or ""}
 
 
 @api.post("/warehouse/lots/{lot_code}/outbound")
-async def warehouse_outbound(lot_code: str, body: OutboundIn, user: dict = Depends(get_current_user)):
+async def warehouse_outbound(request: Request, lot_code: str, body: OutboundIn, user: dict = Depends(get_current_user)):
     lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
     if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
     if body.quantity <= 0: raise HTTPException(status_code=400, detail="Cantidad debe ser positiva")
@@ -1964,11 +2098,16 @@ async def warehouse_outbound(lot_code: str, body: OutboundIn, user: dict = Depen
         "type": "USAGE", "worker_id": user["id"], "date": now_utc().isoformat(),
         "notes": f"Salida lote {lot_code}", "receipt_photo": None, "created_at": now_utc(),
     })
+    await audit_log(
+        db, action="WAREHOUSE_MOVE_OUTBOUND", resource="lot", resource_id=lot["id"],
+        request=request, user=user,
+        extra={"lot_code": lot_code, "quantity": body.quantity, "project_id": body.project_id},
+    )
     return {"ok": True, "quantity_left": new_left, "status": new_status}
 
 
 @api.post("/warehouse/lots/{lot_code}/adjust")
-async def warehouse_adjust(lot_code: str, body: AdjustIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+async def warehouse_adjust(request: Request, lot_code: str, body: AdjustIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
     lot = await db.material_lots.find_one({"lot_code": lot_code, "company_id": user["company_id"]})
     if not lot: raise HTTPException(status_code=404, detail="Lote no encontrado")
     new_left = max(0.0, lot["quantity_left"] + body.quantity)
@@ -2277,6 +2416,7 @@ class AssignAndPrintIn(BaseModel):
 @api.post("/warehouse/assign-and-print")
 async def warehouse_assign_and_print(
     body: AssignAndPrintIn,
+    request: Request,
     user: dict = Depends(get_current_user),
 ):
     """Automatic classification + print flow.
@@ -2376,6 +2516,19 @@ async def warehouse_assign_and_print(
     payload = _build_escpos_bytes(lot_reloaded or lot, mat, chosen_zone["name"])
     print_result = await _try_send_escpos(payload)
 
+    await audit_log(
+        db, action="WAREHOUSE_AUTO_CLASSIFY", resource="lot", resource_id=lot["id"],
+        request=request, user=user,
+        extra={
+            "lot_code": lot["lot_code"],
+            "zone": chosen_zone["name"],
+            "row_label": chosen_row,
+            "category": category,
+            "relocated": bool(previous_zone and previous_zone != chosen_zone["id"]),
+            "printed": print_result.get("printed"),
+        },
+    )
+
     return {
         "ok": True,
         "lot": {
@@ -2406,6 +2559,40 @@ async def warehouse_assign_and_print(
 @api.get("/")
 async def root():
     return {"app": "GLASSWORK", "ok": True}
+
+
+# =========================================================
+# Security — admin-only audit log viewer
+# =========================================================
+@api.get("/security/audit-logs")
+async def list_audit_logs(
+    action: Optional[str] = None,
+    user_email: Optional[str] = None,
+    limit: int = Query(100, le=500),
+    user: dict = Depends(require_role("ADMIN")),
+):
+    flt: dict = {"company_id": user["company_id"]}
+    if action: flt["action"] = action
+    if user_email: flt["user_email"] = {"$regex": user_email, "$options": "i"}
+    docs = await db.audit_logs.find(flt, {"_id": 0}).sort("timestamp", -1).to_list(limit)
+    for d in docs:
+        if isinstance(d.get("timestamp"), datetime):
+            d["timestamp"] = iso(d["timestamp"])
+    return docs
+
+
+@api.get("/security/sessions")
+async def list_active_sessions(user: dict = Depends(require_role("ADMIN"))):
+    """List active access-token sessions for the current company's users."""
+    user_ids = [u["id"] async for u in db.users.find({"company_id": user["company_id"]}, {"id": 1})]
+    docs = await db.token_sessions.find(
+        {"user_id": {"$in": user_ids}}, {"_id": 0}
+    ).sort("last_used", -1).to_list(500)
+    for d in docs:
+        for k in ("issued_at", "last_used", "exp"):
+            if isinstance(d.get(k), datetime):
+                d[k] = iso(d[k])
+    return docs
 
 
 # =========================================================
@@ -2845,6 +3032,10 @@ async def seed():
 async def startup():
     await ensure_indexes()
     await seed()
+    # Security layer setup
+    await ensure_security_indices(db)
+    purged = await cleanup_expired_security_records(db)
+    logger.info(f"Security cleanup on startup: {purged}")
 
 
 @app.on_event("shutdown")
@@ -2860,3 +3051,5 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Security headers — added LAST so it runs first on response (Starlette stacks LIFO)
+app.add_middleware(SecurityHeadersMiddleware)
