@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, StyleSheet, TouchableOpacity, Alert, Modal, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Avatar, Button, Card, Input, Skeleton, EmptyState } from '../../src/ui';
 import { api, apiError } from '../../src/api';
@@ -51,7 +51,7 @@ export default function Team() {
         </View>
         {isAdmin ? (
           <TouchableOpacity onPress={() => setShowInvite(true)} style={styles.addBtn} testID="invite-btn">
-            <Ionicons name="person-add-outline" size={18} color={COLORS.surface} />
+            <Icon name="person-add-outline" size={18} color={COLORS.surface} />
             <Text style={{ color: COLORS.surface, marginLeft: 6, fontWeight: '700' }}>Invitar</Text>
           </TouchableOpacity>
         ) : null}
@@ -93,7 +93,7 @@ export default function Team() {
       <Modal visible={showInvite} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowInvite(false)}>
         <View style={{ flex: 1, backgroundColor: COLORS.background }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-            <TouchableOpacity onPress={() => setShowInvite(false)}><Ionicons name="close" size={26} color={COLORS.primary} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowInvite(false)}><Icon name="close" size={26} color={COLORS.primary} /></TouchableOpacity>
             <Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Invitar persona</Text>
           </View>
           <ScrollView contentContainerStyle={{ padding: SPACING.lg }}>

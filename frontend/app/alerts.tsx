@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../src/Icon';
 import { COLORS, SPACING, TYPO } from '../src/theme';
 import { Card, HeaderBar, SeverityBadge, Skeleton, EmptyState } from '../src/ui';
 import { api } from '../src/api';
@@ -45,7 +45,7 @@ export default function Alerts() {
                     <Text style={TYPO.bodyMedium} numberOfLines={3}>{item.message}</Text>
                     <Text style={[TYPO.body, { color: COLORS.textTertiary, marginTop: 4, fontSize: 11 }]}>{new Date(item.created_at).toLocaleString('es-ES')}</Text>
                   </View>
-                  {item.is_read ? <Ionicons name="checkmark-done" size={18} color={COLORS.textTertiary} /> : null}
+                  {item.is_read ? <Icon name="checkmark-done" size={18} color={COLORS.textTertiary} /> : null}
                 </View>
               </Card>
             </TouchableOpacity>

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Card, KpiCard, Skeleton, EmptyState } from '../../src/ui';
 import { FadeInUp } from '../../src/animations';
@@ -45,7 +45,7 @@ export default function WarehouseTab() {
           <Text style={TYPO.h1}>Almacén</Text>
         </View>
         <TouchableOpacity onPress={() => router.push('/warehouse/scan')} style={styles.scanBtn} testID="warehouse-scan-btn">
-          <Ionicons name="qr-code-outline" size={22} color={COLORS.surface} />
+          <Icon name="qr-code-outline" size={22} color={COLORS.surface} />
           <Text style={{ color: COLORS.surface, fontWeight: '700', marginLeft: 6 }}>Escanear</Text>
         </TouchableOpacity>
       </View>
@@ -79,7 +79,7 @@ export default function WarehouseTab() {
           <Card>
             {dash.low_stock.map((s: any, i: number) => (
               <View key={i} style={[styles.row, i < dash.low_stock.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.border }]}>
-                <Ionicons name="warning" size={16} color={COLORS.warning} />
+                <Icon name="warning" size={16} color={COLORS.warning} />
                 <Text style={[TYPO.bodyMedium, { flex: 1, marginLeft: 8 }]} numberOfLines={1}>{s.name}</Text>
                 <Text style={[TYPO.body, { color: COLORS.warning, fontWeight: '700' }]}>{s.total} {s.unit}</Text>
               </View>
@@ -94,7 +94,7 @@ export default function WarehouseTab() {
 function Action({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.qa}>
-      <Ionicons name={icon} size={24} color={COLORS.primary} />
+      <Icon name={icon} size={24} color={COLORS.primary} />
       <Text style={[TYPO.bodyMedium, { marginTop: 8 }]}>{label}</Text>
     </TouchableOpacity>
   );

@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Card, StatusBadge, Skeleton, EmptyState, ProgressBar, FAB } from '../../src/ui';
 import { api } from '../../src/api';
@@ -106,13 +106,13 @@ export default function ManagerProjects() {
                   </View>
                   <View style={{ flexDirection: 'row', marginTop: SPACING.md, gap: 18 }}>
                     <Text style={[TYPO.body, { color: COLORS.textSecondary }]}>
-                      <Ionicons name="people-outline" size={12} /> {item.assigned_worker_ids?.length || 0}
+                      <Icon name="people-outline" size={12} /> {item.assigned_worker_ids?.length || 0}
                     </Text>
                     <Text style={[TYPO.body, { color: COLORS.textSecondary }]}>
-                      <Ionicons name="image-outline" size={12} /> {item.photo_count || 0}
+                      <Icon name="image-outline" size={12} /> {item.photo_count || 0}
                     </Text>
                     <Text style={[TYPO.body, { color: COLORS.textSecondary }]}>
-                      <Ionicons name="clipboard-outline" size={12} /> {item.log_count || 0}
+                      <Icon name="clipboard-outline" size={12} /> {item.log_count || 0}
                     </Text>
                   </View>
                 </Card>

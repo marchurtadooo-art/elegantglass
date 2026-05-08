@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, KeyboardAvoidingView, Platform,
   TouchableOpacity, ScrollView, ImageBackground, Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../src/Icon';
 import { router } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Haptics from 'expo-haptics';

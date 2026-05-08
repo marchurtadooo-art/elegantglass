@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TextInput } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPO, WEATHER_OPTIONS } from '../../src/theme';
 import { Button, Card, HeaderBar, Input, Skeleton } from '../../src/ui';
@@ -73,9 +73,9 @@ export default function NewLog() {
 
           <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: 8 }]}>HORAS TRABAJADAS</Text>
           <View style={styles.stepper}>
-            <TouchableOpacity onPress={() => incHours(-0.5)} style={styles.stepBtn} testID="hours-minus"><Ionicons name="remove" size={20} color={COLORS.primary} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => incHours(-0.5)} style={styles.stepBtn} testID="hours-minus"><Icon name="remove" size={20} color={COLORS.primary} /></TouchableOpacity>
             <Text style={styles.stepperValue} testID="hours-value">{hours}h</Text>
-            <TouchableOpacity onPress={() => incHours(0.5)} style={styles.stepBtn} testID="hours-plus"><Ionicons name="add" size={20} color={COLORS.primary} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => incHours(0.5)} style={styles.stepBtn} testID="hours-plus"><Icon name="add" size={20} color={COLORS.primary} /></TouchableOpacity>
           </View>
 
           <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: 8 }]}>DESCRIPCIÓN DEL TRABAJO *</Text>
@@ -102,7 +102,7 @@ export default function NewLog() {
                 style={[styles.weatherItem, weather === w.key && styles.weatherItemActive]}
                 testID={`weather-${w.key}`}
               >
-                <Ionicons name={w.icon as any} size={20} color={weather === w.key ? COLORS.surface : COLORS.textPrimary} />
+                <Icon name={w.icon as any} size={20} color={weather === w.key ? COLORS.surface : COLORS.textPrimary} />
                 <Text style={{ color: weather === w.key ? COLORS.surface : COLORS.textSecondary, fontSize: 10, fontWeight: '600', marginTop: 4 }}>{w.label}</Text>
               </TouchableOpacity>
             ))}
@@ -119,7 +119,7 @@ export default function NewLog() {
 
           <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: 8 }]}>INCIDENCIAS</Text>
           <TouchableOpacity onPress={() => setHasIncident(!hasIncident)} style={styles.toggle} testID="toggle-incident">
-            <Ionicons name={hasIncident ? 'checkbox' : 'square-outline'} size={22} color={hasIncident ? COLORS.danger : COLORS.textSecondary} />
+            <Icon name={hasIncident ? 'checkbox' : 'square-outline'} size={22} color={hasIncident ? COLORS.danger : COLORS.textSecondary} />
             <Text style={[TYPO.bodyMedium, { marginLeft: 10 }]}>Reportar incidente</Text>
           </TouchableOpacity>
           {hasIncident ? (

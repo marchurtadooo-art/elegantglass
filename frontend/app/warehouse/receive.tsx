@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Button, Card, HeaderBar, Input } from '../../src/ui';
 import { api, apiError } from '../../src/api';
@@ -75,7 +75,7 @@ export default function ReceiveLot() {
             <View>
               <Text style={[TYPO.h2, { marginBottom: SPACING.md }]}>1. Selecciona material</Text>
               <View style={styles.searchBox}>
-                <Ionicons name="search-outline" size={18} color={COLORS.textTertiary} />
+                <Icon name="search-outline" size={18} color={COLORS.textTertiary} />
                 <TextInput value={search} onChangeText={setSearch} placeholder="Buscar..." placeholderTextColor={COLORS.textTertiary} style={{ flex: 1, marginLeft: 8, height: 44, color: COLORS.textPrimary }} testID="rec-search" />
               </View>
               <View style={{ height: SPACING.md }} />
@@ -111,7 +111,7 @@ export default function ReceiveLot() {
           {step === 2 && createdLot && (
             <View>
               <View style={styles.success}>
-                <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
+                <Icon name="checkmark-circle" size={48} color={COLORS.success} />
                 <Text style={[TYPO.h2, { marginTop: 8, color: COLORS.success, textAlign: 'center' }]}>Lote creado</Text>
                 <Text style={[TYPO.h3, { marginTop: 4, textAlign: 'center' }]}>{createdLot.lot_code}</Text>
               </View>

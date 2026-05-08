@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { router, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -50,7 +50,7 @@ export default function QrFab() {
           testID="qr-fab"
           style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] }]}
         >
-          <Ionicons name="qr-code" size={26} color={COLORS.surface} />
+          <Icon name="qr-code" size={26} color={COLORS.surface} />
         </Pressable>
       </Animated.View>
     </View>

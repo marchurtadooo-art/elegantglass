@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, FlatList } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO, ENTRY_TYPES } from '../../src/theme';
 import { Button, Card, HeaderBar, Skeleton } from '../../src/ui';
 import { api, apiError } from '../../src/api';
@@ -60,7 +60,7 @@ export default function MaterialRegister() {
 
         <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: 8 }]}>BUSCAR MATERIAL</Text>
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color={COLORS.textTertiary} />
+          <Icon name="search-outline" size={18} color={COLORS.textTertiary} />
           <TextInput
             value={search} onChangeText={setSearch} placeholder="Buscar..." placeholderTextColor={COLORS.textTertiary}
             style={{ flex: 1, marginLeft: 8, height: 44, color: COLORS.textPrimary }} testID="material-search"
@@ -75,7 +75,7 @@ export default function MaterialRegister() {
                 <Text style={TYPO.bodyMedium}>{selected.name}</Text>
                 <Text style={[TYPO.body, { color: COLORS.textSecondary }]}>{selected.unit} · {selected.category}</Text>
               </View>
-              <TouchableOpacity onPress={() => setSelected(null)}><Ionicons name="close-circle" size={22} color={COLORS.textTertiary} /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setSelected(null)}><Icon name="close-circle" size={22} color={COLORS.textTertiary} /></TouchableOpacity>
             </View>
           </Card>
         ) : (

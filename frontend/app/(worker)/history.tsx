@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, StyleSheet } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Card, StatusBadge, Skeleton, EmptyState } from '../../src/ui';
 import { api } from '../../src/api';
@@ -47,7 +47,7 @@ export default function WorkerHistory() {
                   <Text style={TYPO.bodyMedium}>{item.project_name || '—'}</Text>
                   <Text style={[TYPO.body, { color: COLORS.textSecondary, marginTop: 2 }]} numberOfLines={2}>{item.work_description}</Text>
                   <View style={{ flexDirection: 'row', marginTop: 8, gap: 14 }}>
-                    <Text style={TYPO.body}><Ionicons name="time-outline" size={12} /> {item.hours_worked}h</Text>
+                    <Text style={TYPO.body}><Icon name="time-outline" size={12} /> {item.hours_worked}h</Text>
                     <Text style={[TYPO.body, { color: COLORS.textSecondary }]}>{new Date(item.date).toLocaleDateString('es-ES')}</Text>
                   </View>
                 </View>

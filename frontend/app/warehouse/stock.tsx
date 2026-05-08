@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO, MAT_CATEGORIES } from '../../src/theme';
 import { Card, HeaderBar, Skeleton, EmptyState } from '../../src/ui';
 import { api } from '../../src/api';
@@ -33,7 +33,7 @@ export default function Stock() {
       <HeaderBar title="Stock actual" onBack={() => router.back()} />
       <View style={{ padding: SPACING.lg, paddingBottom: 0 }}>
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color={COLORS.textTertiary} />
+          <Icon name="search-outline" size={18} color={COLORS.textTertiary} />
           <TextInput value={q} onChangeText={setQ} placeholder="Buscar material..." placeholderTextColor={COLORS.textTertiary} style={{ flex: 1, marginLeft: 8, height: 44, color: COLORS.textPrimary }} />
         </View>
       </View>

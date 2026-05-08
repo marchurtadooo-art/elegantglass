@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Card, StatusBadge, Skeleton, EmptyState, ProgressBar } from '../../src/ui';
 import { useAuth } from '../../src/auth';
@@ -86,7 +86,7 @@ export default function WorkerHome() {
                   <View style={{ flex: 1, paddingRight: 12 }}>
                     <Text style={TYPO.h3} numberOfLines={1}>{item.name}</Text>
                     <Text style={[TYPO.body, { color: COLORS.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-                      <Ionicons name="location-outline" size={12} /> {item.address}
+                      <Icon name="location-outline" size={12} /> {item.address}
                     </Text>
                   </View>
                   <StatusBadge status={item.status} />
@@ -118,7 +118,7 @@ export default function WorkerHome() {
 function QuickAction({ icon, label, onPress, testID }: { icon: any; label: string; onPress: () => void; testID?: string }) {
   return (
     <TouchableOpacity testID={testID} onPress={onPress} activeOpacity={0.85} style={styles.qa}>
-      <Ionicons name={icon} size={24} color={COLORS.primary} />
+      <Icon name={icon} size={24} color={COLORS.primary} />
       <Text style={[TYPO.bodyMedium, { marginTop: 8 }]}>{label}</Text>
     </TouchableOpacity>
   );

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, TYPO } from './theme';
 
@@ -23,14 +23,14 @@ export function PhotoViewer({
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.bg}>
         <TouchableOpacity onPress={onClose} style={[styles.close, { top: insets.top + 12 }]} testID="close-photo">
-          <Ionicons name="close" size={28} color={COLORS.surface} />
+          <Icon name="close" size={28} color={COLORS.surface} />
         </TouchableOpacity>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
           {photo?.image_base64 ? (
             <Image source={{ uri: photo.image_base64 }} style={{ width, height: height * 0.7 }} resizeMode="contain" />
           ) : (
             <View style={{ alignItems: 'center', justifyContent: 'center', height: height * 0.7 }}>
-              <Ionicons name="image-outline" size={64} color={COLORS.textTertiary} />
+              <Icon name="image-outline" size={64} color={COLORS.textTertiary} />
             </View>
           )}
         </ScrollView>

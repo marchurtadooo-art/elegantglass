@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Avatar, Button, Card, Input } from '../../src/ui';
 import { useAuth } from '../../src/auth';
@@ -54,7 +54,7 @@ export default function Profile() {
       </Card>
 
       <View style={styles.privacy}>
-        <Ionicons name="shield-checkmark" size={20} color={COLORS.success} />
+        <Icon name="shield-checkmark" size={20} color={COLORS.success} />
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={[TYPO.bodyMedium, { color: COLORS.success }]}>Sin acceso a datos financieros</Text>
           <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }]}>
@@ -82,9 +82,9 @@ export default function Profile() {
 function Row({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} style={styles.row} activeOpacity={0.7}>
-      <Ionicons name={icon} size={18} color={COLORS.textSecondary} />
+      <Icon name={icon} size={18} color={COLORS.textSecondary} />
       <Text style={[TYPO.bodyMedium, { marginLeft: 12, flex: 1 }]} numberOfLines={1}>{label}</Text>
-      <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+      <Icon name="chevron-forward" size={18} color={COLORS.textTertiary} />
     </TouchableOpacity>
   );
 }
@@ -104,7 +104,7 @@ function ProfileModal({ visible, user, onClose, onSaved }: any) {
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={26} /></TouchableOpacity>
+          <TouchableOpacity onPress={onClose}><Icon name="close" size={26} /></TouchableOpacity>
           <Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Mi perfil</Text>
         </View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>

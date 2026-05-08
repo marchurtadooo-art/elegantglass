@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { Tabs, Redirect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { useAuth } from '../../src/auth';
 import { COLORS } from '../../src/theme';
 import QrFab from '../../src/QrFab';
@@ -22,12 +22,12 @@ export default function ManagerTabs() {
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
       }}
     >
-      <Tabs.Screen name="dashboard" options={{ title: 'Resumen', tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" color={color} size={size} /> }} />
-      <Tabs.Screen name="projects" options={{ title: 'Obras', tabBarIcon: ({ color, size }) => <Ionicons name="briefcase-outline" color={color} size={size} /> }} />
-      <Tabs.Screen name="warehouse" options={{ title: 'Almacén', tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" color={color} size={size} /> }} />
-      <Tabs.Screen name="team" options={{ title: 'Equipo', tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" color={color} size={size} /> }} />
-      <Tabs.Screen name="reports" options={{ title: 'Reportes', tabBarIcon: ({ color, size }) => <Ionicons name="document-text-outline" color={color} size={size} /> }} />
-      <Tabs.Screen name="settings" options={{ title: 'Ajustes', tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="dashboard" options={{ title: 'Resumen', tabBarIcon: ({ color, size }) => <Icon name="bar-chart-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="projects" options={{ title: 'Obras', tabBarIcon: ({ color, size }) => <Icon name="briefcase-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="warehouse" options={{ title: 'Almacén', tabBarIcon: ({ color, size }) => <Icon name="cube-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="team" options={{ title: 'Equipo', tabBarIcon: ({ color, size }) => <Icon name="people-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="reports" options={{ title: 'Reportes', tabBarIcon: ({ color, size }) => <Icon name="document-text-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="settings" options={{ title: 'Ajustes', tabBarIcon: ({ color, size }) => <Icon name="settings-outline" color={color} size={size} /> }} />
     </Tabs>
     <QrFab />
     </View>

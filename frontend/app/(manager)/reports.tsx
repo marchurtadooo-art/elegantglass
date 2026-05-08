@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Button, Card, Skeleton, EmptyState, StatusBadge } from '../../src/ui';
 import { api, apiError } from '../../src/api';
@@ -114,7 +114,7 @@ export default function Reports() {
                       <Text style={TYPO.h3} numberOfLines={2}>{item.name}</Text>
                       {item.address ? (
                         <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 13 }]} numberOfLines={1}>
-                          <Ionicons name="location-outline" size={12} /> {item.address}
+                          <Icon name="location-outline" size={12} /> {item.address}
                         </Text>
                       ) : null}
                       <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12, marginTop: 4 }]}>
@@ -156,7 +156,7 @@ export default function Reports() {
 
                 {item.status !== 'COMPLETED' ? (
                   <Text style={[TYPO.body, { color: COLORS.textTertiary, fontSize: 11, marginTop: 8, textAlign: 'center' }]}>
-                    <Ionicons name="information-circle-outline" size={12} />  Obra aún en curso — el reporte se muestra como avance provisional.
+                    <Icon name="information-circle-outline" size={12} />  Obra aún en curso — el reporte se muestra como avance provisional.
                   </Text>
                 ) : null}
               </Card>

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Alert, Modal, KeyboardAvoidingView, Platform, TouchableOpacity, Image, RefreshControl } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../../src/theme';
 import { Button, Card, HeaderBar, Input, Skeleton, StatusBadge } from '../../../src/ui';
 import { api, apiError } from '../../../src/api';
@@ -114,7 +114,7 @@ export default function LotDetail() {
             : (lot.movements as any[]).map((m, i) => (
               <View key={i} style={[styles.movRow, i < lot.movements.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.border }]}>
                 <View style={[styles.movIcon, { backgroundColor: movColor(m.type) + '22' }]}>
-                  <Ionicons name={movIcon(m.type) as any} size={16} color={movColor(m.type)} />
+                  <Icon name={movIcon(m.type) as any} size={16} color={movColor(m.type)} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={TYPO.bodyMedium}>{movLabel(m.type)} {m.quantity ? `· ${m.quantity}` : ''}</Text>
@@ -140,7 +140,7 @@ export default function LotDetail() {
 function Info({ icon, label }: { icon: any; label: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <Ionicons name={icon} size={14} color={COLORS.textSecondary} />
+      <Icon name={icon} size={14} color={COLORS.textSecondary} />
       <Text style={[TYPO.body, { color: COLORS.textSecondary, marginLeft: 4, fontSize: 13 }]} numberOfLines={1}>{label}</Text>
     </View>
   );
@@ -216,7 +216,7 @@ function LocateModal({ visible, onClose, lotCode, zones, onDone }: any) {
           <Text style={[TYPO.caption, { marginBottom: 6 }]}>ZONA</Text>
           {zones.map((z: any) => (
             <TouchableOpacity key={z.id} onPress={() => setZid(z.id)} style={[styles.zoneRow, zid === z.id && { borderColor: COLORS.primary }]} testID={`zone-${z.id}`}>
-              <Ionicons name={zid === z.id ? 'radio-button-on' : 'radio-button-off'} size={20} color={zid === z.id ? COLORS.primary : COLORS.textTertiary} />
+              <Icon name={zid === z.id ? 'radio-button-on' : 'radio-button-off'} size={20} color={zid === z.id ? COLORS.primary : COLORS.textTertiary} />
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={TYPO.bodyMedium}>{z.name}</Text>
                 <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12 }]}>{z.category} · {z.lot_count} lotes</Text>

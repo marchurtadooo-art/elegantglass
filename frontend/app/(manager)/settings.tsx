@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Avatar, Button, Card, HeaderBar, Input } from '../../src/ui';
 import { useAuth } from '../../src/auth';
@@ -82,9 +82,9 @@ export default function Settings() {
 function Row({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} style={styles.row} activeOpacity={0.7}>
-      <Ionicons name={icon} size={18} color={COLORS.textSecondary} />
+      <Icon name={icon} size={18} color={COLORS.textSecondary} />
       <Text style={[TYPO.bodyMedium, { marginLeft: 12, flex: 1 }]}>{label}</Text>
-      <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+      <Icon name="chevron-forward" size={18} color={COLORS.textTertiary} />
     </TouchableOpacity>
   );
 }
@@ -118,7 +118,7 @@ function CompanyModal({ visible, company, onClose, onSaved }: any) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        <View style={modalStyles.head}><TouchableOpacity onPress={onClose}><Ionicons name="close" size={26} /></TouchableOpacity><Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Empresa</Text></View>
+        <View style={modalStyles.head}><TouchableOpacity onPress={onClose}><Icon name="close" size={26} /></TouchableOpacity><Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Empresa</Text></View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={{ padding: SPACING.lg }} keyboardShouldPersistTaps="handled">
             <Input label="Nombre" value={name} onChangeText={setName} testID="company-name" />
@@ -147,7 +147,7 @@ function ProfileModal({ visible, user, onClose, onSaved }: any) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        <View style={modalStyles.head}><TouchableOpacity onPress={onClose}><Ionicons name="close" size={26} /></TouchableOpacity><Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Mi perfil</Text></View>
+        <View style={modalStyles.head}><TouchableOpacity onPress={onClose}><Icon name="close" size={26} /></TouchableOpacity><Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Mi perfil</Text></View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={{ padding: SPACING.lg }} keyboardShouldPersistTaps="handled">
             <Input label="Nombre" value={name} onChangeText={setName} testID="profile-name" />

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { router } from 'expo-router';
 import { COLORS, SPACING, TYPO, MAT_CATEGORIES } from '../../src/theme';
 import { Button, Card, FAB, HeaderBar, Input, Skeleton, EmptyState } from '../../src/ui';
@@ -52,7 +52,7 @@ export default function MaterialCatalog() {
       <HeaderBar title="Catálogo" onBack={() => router.back()} />
       <View style={{ padding: SPACING.lg }}>
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color={COLORS.textTertiary} />
+          <Icon name="search-outline" size={18} color={COLORS.textTertiary} />
           <TextInput value={q} onChangeText={setQ} placeholder="Buscar material..." placeholderTextColor={COLORS.textTertiary} style={{ flex: 1, marginLeft: 8, height: 44, color: COLORS.textPrimary }} />
         </View>
       </View>
@@ -89,7 +89,7 @@ export default function MaterialCatalog() {
       <Modal visible={showAdd} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAdd(false)}>
         <View style={{ flex: 1, backgroundColor: COLORS.background }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-            <TouchableOpacity onPress={() => setShowAdd(false)}><Ionicons name="close" size={26} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowAdd(false)}><Icon name="close" size={26} /></TouchableOpacity>
             <Text style={[TYPO.h2, { flex: 1, textAlign: 'center', marginRight: 26 }]}>Nuevo material</Text>
           </View>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>

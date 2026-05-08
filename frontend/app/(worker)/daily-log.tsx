@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Button } from '../../src/ui';
 
@@ -16,7 +16,7 @@ export default function WorkerDailyLogTab() {
       </Text>
       <View style={styles.bigCard}>
         <View style={styles.iconWrap}>
-          <Ionicons name="clipboard-outline" size={40} color={COLORS.primary} />
+          <Icon name="clipboard-outline" size={40} color={COLORS.primary} />
         </View>
         <Text style={[TYPO.h2, { marginTop: SPACING.lg, textAlign: 'center' }]}>Crear parte diario</Text>
         <Text style={[TYPO.body, { color: COLORS.textSecondary, textAlign: 'center', marginTop: 4 }]}>

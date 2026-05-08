@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Avatar, Button, Card, HeaderBar, Input } from '../../src/ui';
 import { api, apiError } from '../../src/api';
@@ -104,7 +104,7 @@ export default function NewProject() {
                       <Text style={TYPO.bodyMedium}>{w.name}</Text>
                       <Text style={[TYPO.body, { color: COLORS.textSecondary }]} numberOfLines={1}>{w.email}</Text>
                     </View>
-                    <Ionicons name={sel ? 'checkbox' : 'square-outline'} size={22} color={sel ? COLORS.primary : COLORS.textTertiary} />
+                    <Icon name={sel ? 'checkbox' : 'square-outline'} size={22} color={sel ? COLORS.primary : COLORS.textTertiary} />
                   </TouchableOpacity>
                 );
               })}

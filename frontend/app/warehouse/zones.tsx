@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Modal, KeyboardAvoidingView, Platform, Alert, Image } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO, MAT_CATEGORIES } from '../../src/theme';
 import { Button, Card, HeaderBar, Input, Skeleton, EmptyState, FAB } from '../../src/ui';
 import { api, apiError } from '../../src/api';
@@ -68,13 +68,13 @@ export default function Zones() {
           {zones.map((z) => (
             <Card key={z.id} style={params.highlight === z.id ? { borderLeftWidth: 3, borderLeftColor: COLORS.primary } : undefined}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={styles.icon}><Ionicons name="grid-outline" size={22} color={COLORS.primary} /></View>
+                <View style={styles.icon}><Icon name="grid-outline" size={22} color={COLORS.primary} /></View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={TYPO.h3}>{z.name}</Text>
                   <Text style={[TYPO.body, { color: COLORS.textSecondary }]}>{z.category} · {z.lot_count} lotes · {z.row_count} filas</Text>
                 </View>
                 <TouchableOpacity onPress={() => showZoneQr(z)} style={styles.qrBtn} testID={`zone-qr-${z.id}`}>
-                  <Ionicons name="qr-code-outline" size={20} color={COLORS.primary} />
+                  <Icon name="qr-code-outline" size={20} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
             </Card>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, Image } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { COLORS, SPACING, TYPO, PHOTO_TYPES } from '../../src/theme';
@@ -77,7 +77,7 @@ export default function PhotoCapture() {
           <View>
             <Image source={{ uri: imageUri }} style={styles.preview} />
             <TouchableOpacity onPress={() => { setImageUri(null); setImageBase64(null); }} style={styles.removeBtn}>
-              <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+              <Icon name="trash-outline" size={18} color={COLORS.danger} />
               <Text style={{ color: COLORS.danger, marginLeft: 6, fontWeight: '600' }}>Eliminar</Text>
             </TouchableOpacity>
           </View>

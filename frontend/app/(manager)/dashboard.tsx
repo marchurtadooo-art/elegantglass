@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Image } from 'react-native';import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Card, KpiCard, Skeleton, EmptyState, Avatar, SeverityBadge } from '../../src/ui';
 import { FadeInUp, Stagger, CountUp } from '../../src/animations';
@@ -40,7 +40,7 @@ export default function Dashboard() {
           <Text style={TYPO.h1}>Hola, {user?.name?.split(' ')[0] || ''}</Text>
         </View>
         <TouchableOpacity testID="goto-alerts" onPress={() => router.push('/alerts')} style={styles.bell}>
-          <Ionicons name="notifications-outline" size={20} color={COLORS.primary} />
+          <Icon name="notifications-outline" size={20} color={COLORS.primary} />
           {data?.open_alerts > 0 ? <View style={styles.dot} /> : null}
         </TouchableOpacity>
       </View>
@@ -98,7 +98,7 @@ export default function Dashboard() {
                       {p.image_base64 ? (
                         <Image source={{ uri: p.image_base64 }} style={styles.photoImg} resizeMode="cover" />
                       ) : (
-                        <View style={styles.photoImg}><Ionicons name="image-outline" size={28} color={COLORS.textTertiary} /></View>
+                        <View style={styles.photoImg}><Icon name="image-outline" size={28} color={COLORS.textTertiary} /></View>
                       )}
                       <Text style={[TYPO.bodyMedium, { marginTop: 6 }]} numberOfLines={1}>{p.worker_name}</Text>
                       <Text style={[TYPO.body, { color: COLORS.textSecondary }]} numberOfLines={1}>{p.project_name}</Text>
@@ -116,7 +116,7 @@ export default function Dashboard() {
                 <TouchableOpacity key={a.id} onPress={() => router.push('/alerts')} style={[styles.alertRow, i < alerts.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.border }]}>
                   <SeverityBadge severity={a.severity} />
                   <Text style={[TYPO.body, { flex: 1, marginHorizontal: 10 }]} numberOfLines={2}>{a.message}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+                  <Icon name="chevron-forward" size={18} color={COLORS.textTertiary} />
                 </TouchableOpacity>
               ))}
             </Card>

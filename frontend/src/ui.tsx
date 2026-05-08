@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, TextInput, ActivityIndicator,
   StyleSheet, ViewStyle, TextStyle, StyleProp, Pressable, Animated, Easing, Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import * as Haptics from 'expo-haptics';
 import { COLORS, RADIUS, SPACING, STATUS_COLORS, SEVERITY_COLORS, TYPO } from './theme';
 
@@ -23,7 +23,7 @@ type ButtonProps = {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   loading?: boolean;
   disabled?: boolean;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof any;
   testID?: string;
   style?: StyleProp<ViewStyle>;
   haptic?: boolean;
@@ -62,7 +62,7 @@ export function Button({
         <ActivityIndicator color={fg} />
       ) : (
         <View style={styles.btnRow}>
-          {icon ? <Ionicons name={icon} size={size === 'sm' ? 16 : 18} color={fg} style={{ marginRight: 6 }} /> : null}
+          {icon ? <Icon name={icon} size={size === 'sm' ? 16 : 18} color={fg} style={{ marginRight: 6 }} /> : null}
           <Text
             numberOfLines={1}
             ellipsizeMode="tail"
@@ -122,12 +122,12 @@ export function Input({ label, error, testID, containerStyle, style, ...rest }: 
 }
 
 // ---------- KPI ----------
-export function KpiCard({ label, value, icon, color, testID }: { label: string; value: string | number; icon?: keyof typeof Ionicons.glyphMap; color?: string; testID?: string }) {
+export function KpiCard({ label, value, icon, color, testID }: { label: string; value: string | number; icon?: keyof typeof any; color?: string; testID?: string }) {
   return (
     <View testID={testID} style={styles.kpi}>
       <View style={styles.kpiRow}>
         <Text style={[TYPO.caption, { fontSize: 11 }]} numberOfLines={1}>{label}</Text>
-        {icon ? <Ionicons name={icon} size={14} color={color || COLORS.textTertiary} /> : null}
+        {icon ? <Icon name={icon} size={14} color={color || COLORS.textTertiary} /> : null}
       </View>
       <Text style={[TYPO.h1, { marginTop: 6, color: color || COLORS.textPrimary }]} numberOfLines={1}>
         {value}
@@ -153,11 +153,11 @@ export function Skeleton({ height = 80, style }: { height?: number; style?: Styl
 // ---------- Empty State ----------
 export function EmptyState({
   icon = 'cube-outline', title, subtitle, action, testID,
-}: { icon?: keyof typeof Ionicons.glyphMap; title: string; subtitle?: string; action?: { label: string; onPress: () => void }; testID?: string }) {
+}: { icon?: keyof typeof any; title: string; subtitle?: string; action?: { label: string; onPress: () => void }; testID?: string }) {
   return (
     <View testID={testID} style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={32} color={COLORS.textTertiary} />
+        <Icon name={icon} size={32} color={COLORS.textTertiary} />
       </View>
       <Text style={[TYPO.h3, { marginTop: SPACING.lg, textAlign: 'center' }]}>{title}</Text>
       {subtitle ? <Text style={[TYPO.body, { color: COLORS.textSecondary, textAlign: 'center', marginTop: 6 }]}>{subtitle}</Text> : null}
@@ -220,7 +220,7 @@ export function HeaderBar({ title, onBack, right, testID }: { title: string; onB
             hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
             style={{ width: 44, height: 44, alignItems: 'flex-start', justifyContent: 'center' }}
           >
-            <Ionicons name="chevron-back" size={26} color={COLORS.primary} />
+            <Icon name="chevron-back" size={26} color={COLORS.primary} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -256,7 +256,7 @@ export function Segmented<T extends string>({
 }
 
 // ---------- FAB ----------
-export function FAB({ onPress, icon = 'add', testID }: { onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; testID?: string }) {
+export function FAB({ onPress, icon = 'add', testID }: { onPress: () => void; icon?: keyof typeof any; testID?: string }) {
   return (
     <TouchableOpacity
       testID={testID}
@@ -268,7 +268,7 @@ export function FAB({ onPress, icon = 'add', testID }: { onPress: () => void; ic
       }}
       style={styles.fab}
     >
-      <Ionicons name={icon} size={26} color={COLORS.textInverse} />
+      <Icon name={icon} size={26} color={COLORS.textInverse} />
     </TouchableOpacity>
   );
 }

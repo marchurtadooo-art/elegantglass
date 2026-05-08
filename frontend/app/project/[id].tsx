@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Linking, Image } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Button, Card, HeaderBar, ProgressBar, Segmented, Skeleton, StatusBadge, Avatar, EmptyState } from '../../src/ui';
 import { PhotoViewer } from '../../src/PhotoViewer';
@@ -107,7 +107,7 @@ export default function ProjectDetail() {
         right={
           isWorker ? null : (
             <TouchableOpacity testID="edit-project" onPress={() => router.push({ pathname: '/project/new', params: { id } })}>
-              <Ionicons name="create-outline" size={22} color={COLORS.primary} />
+              <Icon name="create-outline" size={22} color={COLORS.primary} />
             </TouchableOpacity>
           )
         }
@@ -123,9 +123,9 @@ export default function ProjectDetail() {
             <StatusBadge status={project.status} />
           </View>
           <TouchableOpacity onPress={openMaps} style={styles.heroAddr}>
-            <Ionicons name="location-outline" size={14} color={COLORS.surface} />
+            <Icon name="location-outline" size={14} color={COLORS.surface} />
             <Text style={{ color: COLORS.surface, marginLeft: 6, flex: 1 }} numberOfLines={1}>{project.address}</Text>
-            <Ionicons name="open-outline" size={14} color={COLORS.surface} />
+            <Icon name="open-outline" size={14} color={COLORS.surface} />
           </TouchableOpacity>
           <View style={{ marginTop: SPACING.lg }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -152,7 +152,7 @@ export default function ProjectDetail() {
                   {project.status === 'COMPLETED' ? (
                     <Card style={styles.reportCard}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                        <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                        <Icon name="checkmark-circle" size={20} color={COLORS.success} />
                         <Text style={[TYPO.bodyMedium, { marginLeft: 8, color: COLORS.success }]}>Obra completada</Text>
                       </View>
                       <Text style={[TYPO.body, { color: COLORS.textSecondary, marginBottom: SPACING.md }]}>
@@ -183,7 +183,7 @@ export default function ProjectDetail() {
                   ) : (
                     <Card>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="flag-outline" size={20} color={COLORS.primary} />
+                        <Icon name="flag-outline" size={20} color={COLORS.primary} />
                         <View style={{ marginLeft: 10, flex: 1 }}>
                           <Text style={TYPO.bodyMedium}>¿Obra finalizada?</Text>
                           <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12 }]}>
@@ -288,7 +288,7 @@ function PartesTab({ logs, isWorker, onReview, onAdd }: any) {
             <Text style={[TYPO.body, { marginTop: 8 }]} numberOfLines={3}>{l.work_description}</Text>
             {l.incidents ? (
               <View style={{ marginTop: 8, padding: 8, backgroundColor: COLORS.warningBg, borderRadius: 4 }}>
-                <Text style={{ color: COLORS.warning, fontSize: 12 }}><Ionicons name="warning-outline" size={12} /> {l.incidents}</Text>
+                <Text style={{ color: COLORS.warning, fontSize: 12 }}><Icon name="warning-outline" size={12} /> {l.incidents}</Text>
               </View>
             ) : null}
             {!isWorker && l.status === 'PENDING' ? (
@@ -317,7 +317,7 @@ function FotosTab({ photos, onAdd }: any) {
                 <Image source={{ uri: p.image_base64 }} style={{ aspectRatio: 1, borderRadius: 4, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border }} resizeMode="cover" />
               ) : (
                 <View style={{ aspectRatio: 1, backgroundColor: COLORS.background, borderRadius: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border }}>
-                  <Ionicons name="image-outline" size={32} color={COLORS.textTertiary} />
+                  <Icon name="image-outline" size={32} color={COLORS.textTertiary} />
                 </View>
               )}
               <Text style={[TYPO.body, { marginTop: 4 }]} numberOfLines={1}>{p.caption}</Text>

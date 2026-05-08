@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../src/Icon';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPO } from '../src/theme';
 import { Button } from '../src/ui';
@@ -10,7 +10,7 @@ import { useAuth } from '../src/auth';
 import { prefs } from '../src/prefs';
 
 type Slide = {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: keyof typeof any;
   title: string;
   description: string;
   bullets?: string[];
@@ -161,7 +161,7 @@ export default function Onboarding() {
       <View style={{ flex: 1, paddingHorizontal: SPACING.lg, justifyContent: 'center' }}>
         <Animated.View style={[styles.card, dark && styles.cardDark, { opacity: fade, transform: [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
           <View style={[styles.iconWrap, dark && styles.iconWrapDark]}>
-            <Ionicons name={slide.icon} size={42} color={dark ? COLORS.primary : COLORS.surface} />
+            <Icon name={slide.icon} size={42} color={dark ? COLORS.primary : COLORS.surface} />
           </View>
           <Text style={[styles.title, dark && { color: COLORS.surface }]}>{slide.title}</Text>
           <Text style={[styles.desc, dark && { color: 'rgba(255,255,255,0.85)' }]}>{slide.description}</Text>
@@ -169,7 +169,7 @@ export default function Onboarding() {
             <View style={{ marginTop: SPACING.lg, alignSelf: 'stretch' }}>
               {slide.bullets.map((b, i) => (
                 <View key={i} style={styles.bullet}>
-                  <Ionicons name="checkmark-circle" size={18} color={dark ? COLORS.surface : COLORS.success} />
+                  <Icon name="checkmark-circle" size={18} color={dark ? COLORS.surface : COLORS.success} />
                   <Text style={[styles.bulletText, dark && { color: 'rgba(255,255,255,0.92)' }]}>{b}</Text>
                 </View>
               ))}
@@ -190,7 +190,7 @@ export default function Onboarding() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
           {index > 0 ? (
             <TouchableOpacity onPress={goPrev} style={styles.backBtn} testID="onboarding-prev">
-              <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
+              <Icon name="arrow-back" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
           ) : null}
           <View style={{ flex: 1 }}>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Platform, KeyboardAvoidingView, ScrollView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/Icon';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
@@ -86,17 +86,17 @@ export default function ScanScreen() {
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <View style={[styles.head, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn} testID="scan-close">
-          <Ionicons name="close" size={26} color={COLORS.surface} />
+          <Icon name="close" size={26} color={COLORS.surface} />
         </TouchableOpacity>
         <Text style={styles.title}>Escanear QR</Text>
         <TouchableOpacity onPress={() => setShowManual(true)} style={styles.iconBtn} testID="scan-manual">
-          <Ionicons name="keypad-outline" size={22} color={COLORS.surface} />
+          <Icon name="keypad-outline" size={22} color={COLORS.surface} />
         </TouchableOpacity>
       </View>
 
       {isWeb ? (
         <View style={styles.unsupported}>
-          <Ionicons name="phone-portrait-outline" size={64} color={COLORS.surface} />
+          <Icon name="phone-portrait-outline" size={64} color={COLORS.surface} />
           <Text style={[TYPO.h2, { color: COLORS.surface, marginTop: SPACING.lg, textAlign: 'center' }]}>Cámara no disponible en navegador</Text>
           <Text style={{ color: 'rgba(255,255,255,0.75)', textAlign: 'center', marginTop: SPACING.md }}>
             Usa la app móvil para escanear con la cámara, o introduce el código de lote manualmente.
@@ -109,7 +109,7 @@ export default function ScanScreen() {
         <>
           {!permission ? null : !permission.granted ? (
             <View style={styles.unsupported}>
-              <Ionicons name="camera-outline" size={64} color={COLORS.surface} />
+              <Icon name="camera-outline" size={64} color={COLORS.surface} />
               <Text style={[TYPO.h2, { color: COLORS.surface, marginTop: SPACING.lg, textAlign: 'center' }]}>Permiso de cámara</Text>
               <Text style={{ color: 'rgba(255,255,255,0.75)', textAlign: 'center', marginTop: SPACING.md, paddingHorizontal: SPACING.xl }}>
                 Necesitamos acceso a la cámara para escanear códigos QR de los lotes.
@@ -177,7 +177,7 @@ function ResultScreen({ result, onScanAgain, onGoToLot }: { result: AssignResult
       <HeaderBar title="Clasificación automática" onBack={onScanAgain} />
       <ScrollView contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 40 }}>
         <View style={styles.successBadge}>
-          <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
+          <Icon name="checkmark-circle" size={48} color={COLORS.success} />
           <Text style={[TYPO.h2, { color: COLORS.success, marginTop: 6, textAlign: 'center' }]}>
             {relocated ? 'Lote reubicado' : 'Lote clasificado'}
           </Text>
@@ -193,7 +193,7 @@ function ResultScreen({ result, onScanAgain, onGoToLot }: { result: AssignResult
           <Text style={[TYPO.h3, { marginTop: 2 }]} numberOfLines={3}>{material.name || '—'}</Text>
           <View style={styles.chipRow}>
             <View style={styles.catChip}>
-              <Ionicons name="pricetag-outline" size={12} color={COLORS.primary} />
+              <Icon name="pricetag-outline" size={12} color={COLORS.primary} />
               <Text style={styles.catChipText}>{material.category}</Text>
             </View>
             {material.unit ? (
@@ -209,7 +209,7 @@ function ResultScreen({ result, onScanAgain, onGoToLot }: { result: AssignResult
         <View style={styles.assignCard}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <View style={styles.locationIcon}>
-              <Ionicons name="location" size={22} color={COLORS.surface} />
+              <Icon name="location" size={22} color={COLORS.surface} />
             </View>
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[TYPO.caption, { fontSize: 10, color: 'rgba(255,255,255,0.7)' }]}>UBICACIÓN ASIGNADA</Text>
@@ -217,7 +217,7 @@ function ResultScreen({ result, onScanAgain, onGoToLot }: { result: AssignResult
             </View>
           </View>
           <View style={styles.rowBox}>
-            <Ionicons name="swap-vertical-outline" size={16} color={COLORS.surface} />
+            <Icon name="swap-vertical-outline" size={16} color={COLORS.surface} />
             <Text style={{ color: COLORS.surface, marginLeft: 8, fontWeight: '700' }}>{row_label}</Text>
           </View>
         </View>
@@ -226,7 +226,7 @@ function ResultScreen({ result, onScanAgain, onGoToLot }: { result: AssignResult
 
         <View style={[styles.card, print.printed ? styles.printOk : styles.printPending]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons
+            <Icon
               name={print.printed ? 'print' : print.printer_configured ? 'warning-outline' : 'time-outline'}
               size={22}
               color={print.printed ? COLORS.success : COLORS.warning}
