@@ -171,7 +171,7 @@ export default function Reports() {
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} style={[styles.chip, active && styles.chipActive]} activeOpacity={0.8}>
-      <Text style={{ color: active ? COLORS.surface : COLORS.textSecondary, fontWeight: '700', fontSize: 12 }}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -187,14 +187,30 @@ function Stat({ label, value }: { label: string; value: any }) {
 
 const styles = StyleSheet.create({
   chip: {
+    height: 34,
+    minWidth: 96,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  chipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  chipText: {
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 14,
+    textAlign: 'center',
+  },
+  chipTextActive: {
+    color: COLORS.surface,
+  },
   statsRow: {
     flexDirection: 'row',
     marginTop: SPACING.md,

@@ -60,8 +60,8 @@ export default function QrFab() {
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    right: 16,
-    alignItems: 'flex-end',
+    left: 16,
+    alignItems: 'flex-start',
     zIndex: 999,
     elevation: 999,
   },
