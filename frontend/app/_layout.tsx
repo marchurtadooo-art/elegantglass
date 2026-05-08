@@ -65,12 +65,15 @@ if (Platform.OS === 'web' && typeof globalThis !== 'undefined') {
 }
 
 export default function RootLayout() {
-  // useFonts is the official way. We pass ONLY Ionicons.font —
-  // no custom .ttf require()s, no duplicate keys.
+  // Official Expo pattern — Ionicons.font MUST be spread into the useFonts
+  // object so the .ttf entry is registered under the "Ionicons" key.
+  // Without `...Ionicons.font` the icons fail to load on physical devices.
   let fontsLoaded = false;
   let fontError: any = null;
   try {
-    const [loaded, err] = useFonts(Ionicons.font);
+    const [loaded, err] = useFonts({
+      ...Ionicons.font,
+    });
     fontsLoaded = !!loaded;
     fontError = err;
   } catch (e) {
