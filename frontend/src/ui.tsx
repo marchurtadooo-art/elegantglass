@@ -38,10 +38,14 @@ export function Button({
   const bg = isPrimary ? COLORS.primary : isDanger ? COLORS.danger : isSecondary ? COLORS.surface : 'transparent';
   const fg = (isPrimary || isDanger) ? COLORS.textInverse : COLORS.textPrimary;
   const border = isSecondary ? 1 : 0;
+  // Auto-shrink text when title is long so it never gets clipped
+  const titleLen = (title || '').length;
+  const adaptiveSize = titleLen > 22 ? 13 : titleLen > 16 ? 14 : 15;
   return (
     <TouchableOpacity
       testID={testID}
       activeOpacity={0.85}
+      hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
       onPress={() => {
         if (haptic) safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
         onPress?.();
@@ -58,8 +62,14 @@ export function Button({
         <ActivityIndicator color={fg} />
       ) : (
         <View style={styles.btnRow}>
-          {icon ? <Ionicons name={icon} size={18} color={fg} style={{ marginRight: 8 }} /> : null}
-          <Text style={[TYPO.bodyMedium, { color: fg, fontWeight: '600' }]}>{title}</Text>
+          {icon ? <Ionicons name={icon} size={size === 'sm' ? 16 : 18} color={fg} style={{ marginRight: 6 }} /> : null}
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={[{ color: fg, fontWeight: '600', fontSize: adaptiveSize, flexShrink: 1 }]}
+          >
+            {title}
+          </Text>
         </View>
       )}
     </TouchableOpacity>
@@ -76,7 +86,7 @@ export function StatusBadge({ status, testID }: { status: string; testID?: strin
   const cfg = STATUS_COLORS[status] || { bg: COLORS.border, fg: COLORS.textSecondary, label: status };
   return (
     <View testID={testID} style={[styles.badge, { backgroundColor: cfg.bg }]}>
-      <Text style={[styles.badgeText, { color: cfg.fg }]}>{cfg.label}</Text>
+      <Text numberOfLines={1} style={[styles.badgeText, { color: cfg.fg }]}>{cfg.label}</Text>
     </View>
   );
 }
@@ -202,15 +212,20 @@ export function Avatar({ name, size = 36 }: { name?: string | null; size?: numbe
 export function HeaderBar({ title, onBack, right, testID }: { title: string; onBack?: () => void; right?: React.ReactNode; testID?: string }) {
   return (
     <View testID={testID} style={styles.headerBar}>
-      <View style={{ width: 40 }}>
+      <View style={{ width: 44 }}>
         {onBack ? (
-          <TouchableOpacity onPress={onBack} testID="back-btn">
+          <TouchableOpacity
+            onPress={onBack}
+            testID="back-btn"
+            hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+            style={{ width: 44, height: 44, alignItems: 'flex-start', justifyContent: 'center' }}
+          >
             <Ionicons name="chevron-back" size={26} color={COLORS.primary} />
           </TouchableOpacity>
         ) : null}
       </View>
-      <Text numberOfLines={1} style={[TYPO.h3, { flex: 1, textAlign: 'center' }]}>{title}</Text>
-      <View style={{ width: 40, alignItems: 'flex-end' }}>{right}</View>
+      <Text numberOfLines={1} ellipsizeMode="tail" style={[TYPO.h3, { flex: 1, textAlign: 'center', paddingHorizontal: 4 }]}>{title}</Text>
+      <View style={{ width: 44, alignItems: 'flex-end' }}>{right}</View>
     </View>
   );
 }
@@ -246,6 +261,7 @@ export function FAB({ onPress, icon = 'add', testID }: { onPress: () => void; ic
     <TouchableOpacity
       testID={testID}
       activeOpacity={0.8}
+      hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
       onPress={() => {
         safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
         onPress();

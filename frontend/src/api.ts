@@ -89,8 +89,19 @@ api.interceptors.response.use(
 );
 
 export function apiError(e: any): string {
+  // Timeout / no response (server not reachable)
+  if (e?.code === 'ECONNABORTED' || /timeout/i.test(e?.message || '')) {
+    return 'La conexión tardó demasiado. Comprueba tu internet e inténtalo de nuevo.';
+  }
+  if (e?.message === 'Network Error' || !e?.response) {
+    return 'Sin conexión con el servidor. Revisa tu red e inténtalo de nuevo.';
+  }
   const d = e?.response?.data?.detail;
-  if (!d) return e?.message || 'Error de red';
+  if (!d) {
+    if (e?.response?.status === 429) return 'Demasiados intentos, espera unos minutos.';
+    if (e?.response?.status === 500) return 'Error interno del servidor. Inténtalo de nuevo.';
+    return e?.message || 'Error de red';
+  }
   if (typeof d === 'string') return d;
   if (Array.isArray(d)) return d.map((x) => x?.msg || JSON.stringify(x)).join(' ');
   return typeof d === 'object' ? d.msg || JSON.stringify(d) : String(d);
