@@ -40,6 +40,15 @@ from security import (
     SESSION_IDLE_MINUTES,
     LOGIN_BLOCK_MINUTES,
 )
+from notifications import (
+    DEFAULT_NOTIF_PREFS,
+    PREF_KEYS,
+    ensure_notification_indices,
+    register_push_token,
+    unregister_push_token,
+    unregister_user_tokens,
+    send_push,
+)
 
 # ---------- Logging ----------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -323,6 +332,31 @@ class PhotoIn(BaseModel):
     photo_type: PhotoType = "PROGRESS"
 
 
+class PushTokenIn(BaseModel):
+    token: str
+    platform: Optional[str] = "unknown"  # 'ios' | 'android' | 'web'
+
+
+class PushTokenDeleteIn(BaseModel):
+    token: str
+
+
+class NotificationPreferencesIn(BaseModel):
+    new_alert: Optional[bool] = None
+    new_project: Optional[bool] = None
+    log_approved: Optional[bool] = None
+    log_rejected: Optional[bool] = None
+    incident_reported: Optional[bool] = None
+    budget_exceeded: Optional[bool] = None
+
+
+class AlertCreate(BaseModel):
+    type: AlertType
+    severity: AlertSeverity = "INFO"
+    message: str
+    project_id: str  # mandatory
+
+
 # =========================================================
 # Auth endpoints
 # =========================================================
@@ -354,6 +388,7 @@ async def register(body: RegisterIn):
         "phone": body.phone or "",
         "avatar": None,
         "is_active": True,
+        "notification_preferences": dict(DEFAULT_NOTIF_PREFS),
         "created_at": now_utc(),
         "updated_at": now_utc(),
     }
@@ -450,6 +485,13 @@ async def logout(request: Request, user: dict = Depends(get_current_user)):
     if token:
         # We use ACCESS_MIN as expiry estimate; the entry will be cleaned up on startup
         await blacklist_token(db, token, jti, now_utc() + timedelta(minutes=ACCESS_MIN))
+    # Remove this device's push token (best-effort — caller may pass it via body)
+    try:
+        body = await request.json()
+        if isinstance(body, dict) and body.get("push_token"):
+            await unregister_push_token(db, body["push_token"])
+    except Exception:
+        pass
     await audit_log(
         db, action="LOGOUT", resource="auth", request=request,
         user=user, success=True, extra={"jti": jti},
@@ -491,6 +533,7 @@ async def create_user(body: UserCreate, user: dict = Depends(require_role("ADMIN
         "phone": body.phone or "",
         "avatar": None,
         "is_active": True,
+        "notification_preferences": dict(DEFAULT_NOTIF_PREFS),
         "created_at": now_utc(),
         "updated_at": now_utc(),
     }
@@ -600,6 +643,19 @@ async def create_project(request: Request, body: ProjectIn, user: dict = Depends
         db, action="PROJECT_CREATE", resource="project", resource_id=pid,
         request=request, user=user, extra={"name": proj.get("name")},
     )
+    # Push notification: new project to all users in company
+    try:
+        await send_push(
+            db,
+            company_id=user["company_id"],
+            preference_key="new_project",
+            title="Nueva obra creada",
+            body=f"{proj.get('name', 'Nueva obra')} · {proj.get('address', '')}".strip(" ·"),
+            data={"type": "new_project", "project_id": pid},
+            exclude_user_id=user["id"],
+        )
+    except Exception as e:
+        logger.warning(f"push new_project failed: {e}")
     return serialize(proj)
 
 
@@ -812,7 +868,7 @@ async def create_log(body: DailyLogIn, user: dict = Depends(get_current_user)):
     await db.daily_logs.insert_one(log.copy())
     # auto alert if incident
     if body.incidents and body.incidents.strip():
-        await db.alerts.insert_one({
+        alert_doc = {
             "id": str(uuid.uuid4()),
             "company_id": user["company_id"],
             "type": "INCIDENT_REPORTED",
@@ -821,7 +877,27 @@ async def create_log(body: DailyLogIn, user: dict = Depends(get_current_user)):
             "project_id": body.project_id,
             "is_read": False,
             "created_at": now_utc(),
-        })
+        }
+        await db.alerts.insert_one(alert_doc.copy())
+        # Push notification: incident reported → admins/managers in the company
+        try:
+            mgrs = await db.users.find(
+                {"company_id": user["company_id"], "role": {"$in": ["ADMIN", "MANAGER"]}, "is_active": True},
+                {"_id": 0, "id": 1},
+            ).to_list(500)
+            mgr_ids = [m["id"] for m in mgrs]
+            await send_push(
+                db,
+                company_id=user["company_id"],
+                preference_key="incident_reported",
+                title="Incidente reportado",
+                body=alert_doc["message"],
+                data={"type": "incident_reported", "project_id": body.project_id, "alert_id": alert_doc["id"]},
+                user_ids=mgr_ids,
+                exclude_user_id=user["id"],
+            )
+        except Exception as e:
+            logger.warning(f"push incident_reported failed: {e}")
     # update project progress
     if body.progress_percentage and body.progress_percentage > proj.get("progress_percentage", 0):
         await db.projects.update_one(
@@ -845,6 +921,34 @@ async def review_log(log_id: str, body: LogReviewIn, user: dict = Depends(requir
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Parte no encontrado")
     log = await db.daily_logs.find_one({"id": log_id}, {"_id": 0})
+    # Push notification → worker that submitted the log
+    try:
+        worker_id = (log or {}).get("worker_id")
+        if worker_id:
+            proj = await db.projects.find_one({"id": log.get("project_id")}, {"_id": 0, "name": 1})
+            pname = (proj or {}).get("name", "obra")
+            if body.status == "APPROVED":
+                await send_push(
+                    db,
+                    company_id=user["company_id"],
+                    preference_key="log_approved",
+                    title="Parte aprobado ✔",
+                    body=f"Tu parte de {pname} ha sido aprobado.",
+                    data={"type": "log_approved", "log_id": log_id, "project_id": log.get("project_id")},
+                    user_ids=[worker_id],
+                )
+            else:
+                await send_push(
+                    db,
+                    company_id=user["company_id"],
+                    preference_key="log_rejected",
+                    title="Parte rechazado",
+                    body=f"Tu parte de {pname} requiere correcciones." + (f" {body.review_comment}" if body.review_comment else ""),
+                    data={"type": "log_rejected", "log_id": log_id, "project_id": log.get("project_id")},
+                    user_ids=[worker_id],
+                )
+    except Exception as e:
+        logger.warning(f"push log review failed: {e}")
     return serialize(log)
 
 
@@ -975,13 +1079,61 @@ async def dashboard_summary(user: dict = Depends(require_role("ADMIN", "MANAGER"
 
 
 @api.get("/alerts")
-async def list_alerts(user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+async def list_alerts(user: dict = Depends(get_current_user)):
     alerts = await db.alerts.find({"company_id": user["company_id"]}).sort("created_at", -1).to_list(200)
     return [serialize(a) for a in alerts]
 
 
+@api.post("/alerts")
+async def create_alert(
+    request: Request,
+    body: AlertCreate,
+    user: dict = Depends(require_role("ADMIN", "MANAGER")),
+):
+    msg = (body.message or "").strip()
+    if len(msg) < 3:
+        raise HTTPException(status_code=400, detail="El mensaje es obligatorio (mín. 3 caracteres)")
+    proj = await db.projects.find_one(
+        {"id": body.project_id, "company_id": user["company_id"]}, {"_id": 0, "name": 1}
+    )
+    if not proj:
+        raise HTTPException(status_code=404, detail="Obra no encontrada")
+    alert_doc = {
+        "id": str(uuid.uuid4()),
+        "company_id": user["company_id"],
+        "type": body.type,
+        "severity": body.severity,
+        "message": msg,
+        "project_id": body.project_id,
+        "is_read": False,
+        "created_by": user["id"],
+        "created_at": now_utc(),
+    }
+    await db.alerts.insert_one(alert_doc.copy())
+    await audit_log(
+        db, action="ALERT_CREATE", resource="alert", resource_id=alert_doc["id"],
+        request=request, user=user, extra={"type": body.type, "severity": body.severity, "project_id": body.project_id},
+    )
+    # Push notification to all users in company with new_alert preference
+    try:
+        sev_emoji = {"CRITICAL": "🚨", "WARNING": "⚠️", "INFO": "ℹ️"}.get(body.severity, "")
+        title = f"{sev_emoji} Nueva alerta · {proj.get('name', '')}".strip()
+        await send_push(
+            db,
+            company_id=user["company_id"],
+            preference_key="new_alert",
+            title=title or "Nueva alerta",
+            body=msg,
+            data={"type": "new_alert", "alert_id": alert_doc["id"], "project_id": body.project_id, "severity": body.severity},
+            exclude_user_id=user["id"],
+        )
+    except Exception as e:
+        logger.warning(f"push new_alert failed: {e}")
+    return serialize(alert_doc)
+
+
 @api.patch("/alerts/{aid}/read")
-async def mark_alert_read(aid: str, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+async def mark_alert_read(aid: str, user: dict = Depends(get_current_user)):
     await db.alerts.update_one({"id": aid, "company_id": user["company_id"]}, {"$set": {"is_read": True}})
     return {"ok": True}
 
@@ -1045,6 +1197,36 @@ async def update_profile(body: ProfileUpdate, user: dict = Depends(get_current_u
         await db.users.update_one({"id": user["id"]}, {"$set": upd})
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
     return serialize(u)
+
+
+# ---- Notification preferences ----
+@api.patch("/profile/notifications")
+async def update_notification_preferences(
+    body: NotificationPreferencesIn, user: dict = Depends(get_current_user)
+):
+    prefs = dict(user.get("notification_preferences") or DEFAULT_NOTIF_PREFS)
+    incoming = body.dict(exclude_none=True)
+    for k, v in incoming.items():
+        if k in PREF_KEYS:
+            prefs[k] = bool(v)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"notification_preferences": prefs, "updated_at": now_utc()}},
+    )
+    return {"notification_preferences": prefs}
+
+
+# ---- Push token registration ----
+@api.post("/push-token")
+async def add_push_token(body: PushTokenIn, user: dict = Depends(get_current_user)):
+    return await register_push_token(
+        db, user["id"], user["company_id"], body.token, body.platform or "unknown"
+    )
+
+
+@api.delete("/push-token")
+async def remove_push_token(body: PushTokenDeleteIn, user: dict = Depends(get_current_user)):
+    return await unregister_push_token(db, body.token)
 
 
 @api.get("/company")
@@ -2705,6 +2887,8 @@ async def startup():
     await ensure_security_indices(db)
     purged = await cleanup_expired_security_records(db)
     logger.info(f"Security cleanup on startup: {purged}")
+    # Push notifications indices
+    await ensure_notification_indices(db)
 
 
 @app.on_event("shutdown")

@@ -82,7 +82,14 @@
           "faceIDPermission": "Para acceso rápido y seguro a tu cuenta."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#B8924C",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,7 +1,16 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, tokenStore, apiError } from './api';
+import { registerPushTokenWithBackend, unregisterPushTokenWithBackend } from './notifications';
 
 export type Role = 'ADMIN' | 'MANAGER' | 'WORKER';
+export type NotificationPrefs = {
+  new_alert?: boolean;
+  new_project?: boolean;
+  log_approved?: boolean;
+  log_rejected?: boolean;
+  incident_reported?: boolean;
+  budget_exceeded?: boolean;
+};
 export type User = {
   id: string;
   name: string;
@@ -10,6 +19,7 @@ export type User = {
   company_id: string;
   phone?: string;
   avatar?: string | null;
+  notification_preferences?: NotificationPrefs;
 };
 
 type AuthState = {
@@ -43,6 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const t = await tokenStore.getAccess();
       if (!t) { setUser(null); return; }
       await refreshUser();
+      // Re-register push token on app start (best-effort)
+      registerPushTokenWithBackend().catch(() => {});
     })();
   }, [refreshUser]);
 
@@ -52,6 +64,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const r = await api.post('/auth/login', { email, password });
       await tokenStore.setTokens(r.data.access_token, r.data.refresh_token);
       setUser(r.data.user);
+      // Register the push token for this device (best-effort)
+      registerPushTokenWithBackend().catch(() => {});
     } catch (e: any) {
       throw new Error(apiError(e));
     } finally {
@@ -65,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const r = await api.post('/auth/register', data);
       await tokenStore.setTokens(r.data.access_token, r.data.refresh_token);
       setUser(r.data.user);
+      registerPushTokenWithBackend().catch(() => {});
     } catch (e: any) {
       throw new Error(apiError(e));
     } finally {
@@ -73,6 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    // Unregister push token BEFORE clearing the auth bearer
+    try { await unregisterPushTokenWithBackend(); } catch {}
     try { await api.post('/auth/logout'); } catch {}
     await tokenStore.clear();
     setUser(null);

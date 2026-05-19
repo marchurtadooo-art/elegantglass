@@ -16,11 +16,33 @@ export default function Settings() {
   const [showCompany, setShowCompany] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [notifAlerts, setNotifAlerts] = useState(true);
-  const [notifReports, setNotifReports] = useState(true);
-  const [notifLogs, setNotifLogs] = useState(false);
+  const [prefs, setPrefs] = useState<Record<string, boolean>>({
+    new_alert: true,
+    new_project: true,
+    log_approved: true,
+    log_rejected: true,
+    incident_reported: true,
+    budget_exceeded: true,
+  });
 
   useEffect(() => { api.get('/company').then((r) => setCompany(r.data)).catch(() => {}); }, []);
+  useEffect(() => {
+    const np = (user as any)?.notification_preferences;
+    if (np && typeof np === 'object') {
+      setPrefs((p) => ({ ...p, ...np }));
+    }
+  }, [user]);
+
+  const updatePref = async (key: string, value: boolean) => {
+    setPrefs((p) => ({ ...p, [key]: value }));
+    try {
+      await api.patch('/profile/notifications', { [key]: value });
+    } catch (e) {
+      // Rollback on error
+      setPrefs((p) => ({ ...p, [key]: !value }));
+      Alert.alert('Error', apiError(e));
+    }
+  };
 
   const confirmLogout = () => {
     Alert.alert('Cerrar sesión', '¿Seguro que quieres salir?', [
@@ -63,9 +85,12 @@ export default function Settings() {
 
       <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Notificaciones</Text>
       <Card>
-        <Toggle label="Alertas críticas" value={notifAlerts} onChange={setNotifAlerts} />
-        <Toggle label="Reportes semanales" value={notifReports} onChange={setNotifReports} />
-        <Toggle label="Recordatorio diario operarios" value={notifLogs} onChange={setNotifLogs} />
+        <Toggle label="Nuevas alertas" value={!!prefs.new_alert} onChange={(v) => updatePref('new_alert', v)} />
+        <Toggle label="Nuevas obras" value={!!prefs.new_project} onChange={(v) => updatePref('new_project', v)} />
+        <Toggle label="Parte aprobado" value={!!prefs.log_approved} onChange={(v) => updatePref('log_approved', v)} />
+        <Toggle label="Parte rechazado" value={!!prefs.log_rejected} onChange={(v) => updatePref('log_rejected', v)} />
+        <Toggle label="Incidente reportado" value={!!prefs.incident_reported} onChange={(v) => updatePref('incident_reported', v)} />
+        <Toggle label="Presupuesto superado" value={!!prefs.budget_exceeded} onChange={(v) => updatePref('budget_exceeded', v)} />
       </Card>
 
       <View style={{ marginTop: SPACING.xl }}>

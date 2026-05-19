@@ -15,8 +15,32 @@ export default function Profile() {
   const [company, setCompany] = useState<any | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [prefs, setPrefs] = useState<Record<string, boolean>>({
+    new_alert: true,
+    new_project: true,
+    log_approved: true,
+    log_rejected: true,
+    incident_reported: true,
+    budget_exceeded: true,
+  });
 
   useEffect(() => { api.get('/company').then((r) => setCompany(r.data)).catch(() => {}); }, []);
+  useEffect(() => {
+    const np = (user as any)?.notification_preferences;
+    if (np && typeof np === 'object') {
+      setPrefs((p) => ({ ...p, ...np }));
+    }
+  }, [user]);
+
+  const updatePref = async (key: string, value: boolean) => {
+    setPrefs((p) => ({ ...p, [key]: value }));
+    try {
+      await api.patch('/profile/notifications', { [key]: value });
+    } catch (e) {
+      setPrefs((p) => ({ ...p, [key]: !value }));
+      Alert.alert('Error', apiError(e));
+    }
+  };
 
   const confirmLogout = () => {
     Alert.alert('Cerrar sesión', '¿Seguro que quieres salir?', [
@@ -63,6 +87,15 @@ export default function Profile() {
         </View>
       </View>
 
+      <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Notificaciones</Text>
+      <Card>
+        <Toggle label="Nuevas alertas" value={!!prefs.new_alert} onChange={(v) => updatePref('new_alert', v)} />
+        <Toggle label="Nuevas obras" value={!!prefs.new_project} onChange={(v) => updatePref('new_project', v)} />
+        <Toggle label="Parte aprobado" value={!!prefs.log_approved} onChange={(v) => updatePref('log_approved', v)} />
+        <Toggle label="Parte rechazado" value={!!prefs.log_rejected} onChange={(v) => updatePref('log_rejected', v)} />
+        <Toggle label="Incidente reportado" value={!!prefs.incident_reported} onChange={(v) => updatePref('incident_reported', v)} />
+      </Card>
+
       <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Datos</Text>
       <Card>
         <Row icon="cloud-download-outline" label={exporting ? 'Exportando...' : 'Exportar mis datos'} onPress={exportData} />
@@ -85,6 +118,17 @@ function Row({ icon, label, onPress }: { icon: any; label: string; onPress: () =
       <Icon name={icon} size={18} color={COLORS.textSecondary} />
       <Text style={[TYPO.bodyMedium, { marginLeft: 12, flex: 1 }]} numberOfLines={1}>{label}</Text>
       <Icon name="chevron-forward" size={18} color={COLORS.textTertiary} />
+    </TouchableOpacity>
+  );
+}
+
+function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <TouchableOpacity onPress={() => onChange(!value)} style={styles.row} activeOpacity={0.7}>
+      <Text style={[TYPO.bodyMedium, { flex: 1 }]}>{label}</Text>
+      <View style={[styles.tog, value && styles.togOn]}>
+        <View style={[styles.togDot, value && styles.togDotOn]} />
+      </View>
     </TouchableOpacity>
   );
 }
@@ -125,4 +169,8 @@ const styles = StyleSheet.create({
   rolePillText: { color: COLORS.textInverse, fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   privacy: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: COLORS.successBg, borderRadius: 4, padding: 12, marginTop: SPACING.md, borderLeftWidth: 3, borderLeftColor: COLORS.success },
+  tog: { width: 44, height: 26, borderRadius: 13, backgroundColor: COLORS.border, padding: 2 },
+  togOn: { backgroundColor: COLORS.success },
+  togDot: { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.surface },
+  togDotOn: { transform: [{ translateX: 18 }] },
 });

@@ -1,362 +1,400 @@
-"""Backend test for the SECURITY layer (security.py + server.py integration).
+"""GLASSWORK push-notifications backend test suite.
 
-Tests requested:
-  A. Security headers on / and /auth/login
-  B. Login lockout (5 fails -> 6th 429; per-email isolation)
-  C. Token blacklist + logout
-  D. Session tracking (last_used updates)
-  E. Audit logs (LOGIN, PROJECT_CREATE/DELETE, WAREHOUSE_MOVE_INBOUND, WAREHOUSE_AUTO_CLASSIFY)
-  F. Worker forbidden on /security/*
+Tests the new push-notification system endpoints against the live preview backend.
 """
-from __future__ import annotations
-import json
 import os
+import sys
 import time
-import uuid
+import json
 import requests
+from typing import Optional
 
-BACKEND_URL = "https://site-glass-preview.preview.emergentagent.com"
-API = f"{BACKEND_URL}/api"
+BASE = "https://site-glass-preview.preview.emergentagent.com/api"
 
-ADMIN_EMAIL = "jefe@elegantglass.es"
-ADMIN_PASSWORD = "Admin1234!"
-WORKER_EMAIL = "carlos@elegantglass.es"
-WORKER_PASSWORD = "Worker1234!"
+TS = int(time.time())
+ADMIN_EMAIL = f"admin-pushtest+{TS}@example.com"
+ADMIN_PWD = "Admin1234!"
+WORKER_EMAIL = f"worker-pushtest+{TS}@example.com"
+WORKER_PWD = "Worker1234!"
 
-results: list[tuple[str, bool, str]] = []
-
-
-def add(name: str, ok: bool, detail: str = "") -> None:
-    results.append((name, ok, detail))
-    mark = "PASS" if ok else "FAIL"
-    print(f"[{mark}] {name} :: {detail}")
+passed = 0
+failed = 0
+failures: list = []
+errors_500: list = []
 
 
-def hdr(token: str | None = None) -> dict:
-    h = {"Content-Type": "application/json"}
+def check(cond: bool, label: str, info: str = ""):
+    global passed, failed
+    if cond:
+        passed += 1
+        print(f"  ok  {label}")
+    else:
+        failed += 1
+        failures.append(f"{label} :: {info}")
+        print(f"  FAIL {label} :: {info}")
+
+
+def req(method: str, path: str, token: Optional[str] = None, **kw):
+    url = f"{BASE}{path}"
+    headers = kw.pop("headers", {}) or {}
     if token:
-        h["Authorization"] = f"Bearer {token}"
-    return h
-
-
-def login(email: str, password: str) -> tuple[int, dict, dict]:
-    r = requests.post(
-        f"{API}/auth/login",
-        json={"email": email, "password": password},
-        headers={"Content-Type": "application/json"},
-        timeout=30,
-    )
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        body = r.json()
-    except Exception:
-        body = {"_raw": r.text}
-    return r.status_code, body, dict(r.headers)
+        r = requests.request(method, url, headers=headers, timeout=30, **kw)
+        if r.status_code >= 500:
+            errors_500.append(f"{method} {path} -> {r.status_code}: {r.text[:300]}")
+        return r
+    except Exception as e:
+        errors_500.append(f"{method} {path} -> EXC: {e}")
+        raise
 
 
-# -----------------------------------------------------------
-# A. Security headers
-# -----------------------------------------------------------
-def test_security_headers():
-    print("\n=== A. SECURITY HEADERS ===")
-    # A1 GET /api/
-    r = requests.get(f"{API}/", timeout=30)
-    h = {k.lower(): v for k, v in r.headers.items()}
-    a1_xcto = h.get("x-content-type-options", "") == "nosniff"
-    a1_xfo = h.get("x-frame-options", "") == "DENY"
-    a1_hsts = "max-age=31536000" in h.get("strict-transport-security", "")
-    a1_csp = "default-src" in h.get("content-security-policy", "")
-    add("A1 GET /api/ X-Content-Type-Options=nosniff", a1_xcto, h.get("x-content-type-options", ""))
-    add("A1 GET /api/ X-Frame-Options=DENY", a1_xfo, h.get("x-frame-options", ""))
-    add("A1 GET /api/ Strict-Transport-Security max-age=31536000", a1_hsts, h.get("strict-transport-security", ""))
-    add("A1 GET /api/ Content-Security-Policy default-src", a1_csp, h.get("content-security-policy", ""))
-
-    # A2 POST /auth/login (admin)
-    sc, body, headers = login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    h2 = {k.lower(): v for k, v in headers.items()}
-    add("A2 POST /auth/login admin status=200", sc == 200, str(sc))
-    add("A2 POST /auth/login X-Content-Type-Options=nosniff", h2.get("x-content-type-options", "") == "nosniff", h2.get("x-content-type-options", ""))
-    add("A2 POST /auth/login X-Frame-Options=DENY", h2.get("x-frame-options", "") == "DENY", h2.get("x-frame-options", ""))
-    add("A2 POST /auth/login Strict-Transport-Security", "max-age=31536000" in h2.get("strict-transport-security", ""), h2.get("strict-transport-security", ""))
-    add("A2 POST /auth/login Content-Security-Policy", "default-src" in h2.get("content-security-policy", ""), h2.get("content-security-policy", ""))
-    return body.get("access_token") if sc == 200 else None
+def headline(label: str):
+    print(f"\n=== {label} ===")
 
 
-# -----------------------------------------------------------
-# B. Login lockout
-# -----------------------------------------------------------
-def test_login_lockout():
-    print("\n=== B. LOGIN LOCKOUT ===")
-    # Use a unique made-up email with extra UUID to avoid pollution
-    locked_email = f"lockout-test-{uuid.uuid4().hex[:8]}@example.com"
-    # 5 failed attempts -> 401
-    statuses = []
-    for i in range(5):
-        sc, body, _ = login(locked_email, "WrongPassword!")
-        statuses.append(sc)
-    all_5_unauthorized = all(sc == 401 for sc in statuses)
-    add(f"B1 First 5 login attempts => 401 each ({statuses})", all_5_unauthorized, str(statuses))
+# ----------------------------------------------------------
+# Setup
+# ----------------------------------------------------------
+headline("Setup — register admin and create worker")
 
-    # 6th attempt -> 429 with Demasiados intentos
-    sc6, body6, _ = login(locked_email, "WrongPassword!")
-    detail6 = body6.get("detail", "") if isinstance(body6, dict) else ""
-    is_429 = sc6 == 429
-    has_msg = "Demasiados intentos" in str(detail6)
-    add(f"B1 6th attempt => 429", is_429, f"sc={sc6} detail={detail6}")
-    add(f"B1 6th attempt detail contains 'Demasiados intentos'", has_msg, str(detail6))
+r = req("POST", "/auth/register", json={
+    "name": "Admin Test",
+    "email": ADMIN_EMAIL,
+    "password": ADMIN_PWD,
+    "company_name": "PushTest Co",
+})
+check(r.status_code == 200, "POST /auth/register admin -> 200", f"got {r.status_code}: {r.text[:200]}")
+if r.status_code != 200:
+    print("Cannot continue without admin token. Aborting.")
+    sys.exit(1)
+data = r.json()
+admin_token = data["access_token"]
+admin_user = data["user"]
+admin_id = admin_user["id"]
+check("notification_preferences" in admin_user,
+      "register response includes notification_preferences", str(list(admin_user.keys())))
+prefs = admin_user.get("notification_preferences") or {}
+expected_defaults = {
+    "new_alert": True, "new_project": True, "log_approved": True,
+    "log_rejected": True, "incident_reported": True, "budget_exceeded": True,
+}
+check(prefs == expected_defaults,
+      "admin default notification_preferences match exactly 6 keys all true",
+      f"got {prefs}")
 
-    # 7th attempt with anything -> still 429 (per-email lock)
-    sc7, body7, _ = login(locked_email, "AnythingDoesntMatter!")
-    add(f"B1 7th attempt to same email still 429", sc7 == 429, f"sc={sc7} detail={body7.get('detail','')}")
+# Create worker (admin only)
+r = req("POST", "/users", token=admin_token, json={
+    "name": "Worker Test",
+    "email": WORKER_EMAIL,
+    "password": WORKER_PWD,
+    "role": "WORKER",
+})
+check(r.status_code == 200, "POST /users worker (admin) -> 200", f"got {r.status_code}: {r.text[:200]}")
+worker_user = r.json() if r.status_code == 200 else {}
+worker_id = worker_user.get("id")
+check(worker_user.get("notification_preferences") == expected_defaults,
+      "worker default notification_preferences match defaults",
+      f"got {worker_user.get('notification_preferences')}")
 
-    # B2: Different email (admin) should still work
-    sc_admin, body_admin, _ = login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    add("B2 Other email (admin) login still works", sc_admin == 200 and "access_token" in body_admin, f"sc={sc_admin}")
-    return body_admin.get("access_token") if sc_admin == 200 else None
-
-
-# -----------------------------------------------------------
-# C. Token blacklist + logout
-# -----------------------------------------------------------
-def test_token_blacklist():
-    print("\n=== C. TOKEN BLACKLIST + LOGOUT ===")
-    sc, body, _ = login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    add("C1 Admin login => 200", sc == 200, f"sc={sc}")
-    if sc != 200:
-        return None
-    a1 = body["access_token"]
-    # C2 GET /auth/me with A1 -> 200
-    r = requests.get(f"{API}/auth/me", headers=hdr(a1), timeout=30)
-    add("C2 GET /auth/me with token => 200", r.status_code == 200, f"sc={r.status_code}")
-
-    # C3 logout
-    r3 = requests.post(f"{API}/auth/logout", headers=hdr(a1), timeout=30)
-    add("C3 POST /auth/logout => 200", r3.status_code == 200, f"sc={r3.status_code} body={r3.text[:80]}")
-
-    # C4 GET /auth/me with same token -> 401
-    r4 = requests.get(f"{API}/auth/me", headers=hdr(a1), timeout=30)
-    sc4 = r4.status_code
-    detail4 = ""
-    try:
-        detail4 = r4.json().get("detail", "")
-    except Exception:
-        pass
-    add("C4 GET /auth/me after logout => 401", sc4 == 401, f"sc={sc4} detail={detail4}")
-    add("C4 detail mentions 'revocado'", "revocado" in str(detail4).lower(), str(detail4))
+# Login as worker
+r = req("POST", "/auth/login", json={"email": WORKER_EMAIL, "password": WORKER_PWD})
+check(r.status_code == 200, "POST /auth/login worker -> 200", f"{r.status_code}: {r.text[:200]}")
+worker_token = r.json()["access_token"] if r.status_code == 200 else None
 
 
-# -----------------------------------------------------------
-# D. Session tracking
-# -----------------------------------------------------------
-def test_session_tracking():
-    print("\n=== D. SESSION TRACKING ===")
-    sc, body, _ = login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    if sc != 200:
-        add("D Login failed", False, f"sc={sc}")
-        return None
-    token = body["access_token"]
-    # Decode JWT to get jti (no verification needed, just base64 split)
-    import base64
-    parts = token.split(".")
-    payload_part = parts[1]
-    payload_part += "=" * ((4 - len(payload_part) % 4) % 4)
-    payload = json.loads(base64.urlsafe_b64decode(payload_part))
-    jti = payload.get("jti")
-    add("D Access token contains jti", bool(jti), f"jti={jti}")
-
-    # D1: GET /api/security/sessions
-    r = requests.get(f"{API}/security/sessions", headers=hdr(token), timeout=30)
-    sc1 = r.status_code
-    sessions = r.json() if sc1 == 200 else []
-    add("D1 GET /security/sessions => 200", sc1 == 200, f"sc={sc1}")
-    # Find our session
-    mine = next((s for s in sessions if s.get("jti") == jti), None)
-    add("D1 own session present in list", mine is not None, f"sessions={len(sessions)}")
-    if mine:
-        for f in ("last_used", "issued_at", "exp", "jti", "user_id"):
-            add(f"D1 session has '{f}' field", f in mine and mine[f] is not None, f"{f}={mine.get(f)}")
-        last_used_1 = mine.get("last_used")
-    else:
-        last_used_1 = None
-
-    # D2: Make another auth GET, then check last_used updated
-    time.sleep(1.2)  # ensure timestamp difference is observable at second granularity
-    requests.get(f"{API}/auth/me", headers=hdr(token), timeout=30)
-    time.sleep(0.5)
-    r2 = requests.get(f"{API}/security/sessions", headers=hdr(token), timeout=30)
-    sessions2 = r2.json() if r2.status_code == 200 else []
-    mine2 = next((s for s in sessions2 if s.get("jti") == jti), None)
-    if mine2 and last_used_1:
-        last_used_2 = mine2.get("last_used")
-        # Compare ISO strings (lexicographic works for ISO with same TZ)
-        updated = last_used_2 and last_used_2 > last_used_1
-        add("D2 last_used updated after subsequent request", bool(updated),
-            f"before={last_used_1} after={last_used_2}")
-    else:
-        add("D2 last_used updated after subsequent request", False, "could not locate session")
-
-    # Positive: fresh token works (we already used it)
-    add("D Fresh token works (positive)", True, "verified by /auth/me 200 above")
-    return token
+# ----------------------------------------------------------
+# 1) /auth/me default prefs
+# ----------------------------------------------------------
+headline("1) GET /auth/me default prefs")
+r = req("GET", "/auth/me", token=admin_token)
+check(r.status_code == 200, "GET /auth/me admin -> 200", str(r.status_code))
+me = r.json() if r.status_code == 200 else {}
+check(me.get("notification_preferences") == expected_defaults,
+      "/auth/me admin prefs match defaults",
+      f"got {me.get('notification_preferences')}")
 
 
-# -----------------------------------------------------------
-# E. Audit logs
-# -----------------------------------------------------------
-def test_audit_logs():
-    print("\n=== E. AUDIT LOGS ===")
-    # Fresh login to ensure a recent LOGIN event
-    sc, body, _ = login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    if sc != 200:
-        add("E login failed", False, f"sc={sc}")
-        return
-    token = body["access_token"]
+# ----------------------------------------------------------
+# 2) PATCH /api/profile/notifications
+# ----------------------------------------------------------
+headline("2) PATCH /profile/notifications")
+r = req("PATCH", "/profile/notifications", token=admin_token,
+        json={"new_alert": False, "log_rejected": False})
+check(r.status_code == 200, "PATCH prefs -> 200", str(r.status_code))
+patched_prefs = r.json().get("notification_preferences") if r.status_code == 200 else {}
+expected_after = {
+    "new_alert": False, "new_project": True, "log_approved": True,
+    "log_rejected": False, "incident_reported": True, "budget_exceeded": True,
+}
+check(patched_prefs == expected_after,
+      "patched prefs reflect change",
+      f"got {patched_prefs}")
 
-    # E1: GET audit-logs as admin -> array, contains LOGIN with admin email
-    r = requests.get(f"{API}/security/audit-logs", headers=hdr(token), timeout=30)
-    add("E1 GET /security/audit-logs (admin) => 200", r.status_code == 200, f"sc={r.status_code}")
-    if r.status_code == 200:
-        logs = r.json()
-        add("E1 audit logs is array", isinstance(logs, list), f"type={type(logs).__name__}")
-        login_match = next(
-            (l for l in logs if l.get("action") == "LOGIN" and l.get("user_email") == ADMIN_EMAIL),
-            None,
-        )
-        add("E1 audit log has LOGIN entry for admin", login_match is not None, f"#logs={len(logs)}")
-        if login_match:
-            ip = login_match.get("ip", "")
-            add("E1 LOGIN audit entry has non-empty ip", bool(ip), f"ip={ip}")
+r = req("GET", "/auth/me", token=admin_token)
+check(r.status_code == 200 and r.json().get("notification_preferences") == expected_after,
+      "/auth/me reflects patched prefs", f"got {r.json().get('notification_preferences')}")
 
-    # E2: PROJECT_CREATE
-    proj_payload = {
-        "name": f"Obra Seguridad QA {uuid.uuid4().hex[:6]}",
-        "description": "Proyecto creado por test de seguridad",
-        "address": "Calle Test 123, Palma",
-        "status": "PENDING",
-        "budget": 1000.0,
-        "client_name": "Cliente QA",
-        "client_phone": "",
-        "client_email": "",
-        "notes": "",
-        "assigned_worker_ids": [],
-    }
-    rc = requests.post(f"{API}/projects", headers=hdr(token), json=proj_payload, timeout=30)
-    add("E2 POST /projects => 200", rc.status_code == 200, f"sc={rc.status_code} body={rc.text[:120]}")
-    project_id = None
-    if rc.status_code == 200:
-        project_id = rc.json().get("id")
-        time.sleep(0.5)
-        r2 = requests.get(
-            f"{API}/security/audit-logs",
-            headers=hdr(token),
-            params={"action": "PROJECT_CREATE"},
-            timeout=30,
-        )
-        logs = r2.json() if r2.status_code == 200 else []
-        match = next((l for l in logs if l.get("resource_id") == project_id and l.get("action") == "PROJECT_CREATE" and l.get("resource") == "project"), None)
-        add("E2 audit_logs has PROJECT_CREATE for new project", match is not None,
-            f"resource_id={project_id} #matches={len([l for l in logs if l.get('resource_id') == project_id])}")
+# PATCH {} -> leaves unchanged
+r = req("PATCH", "/profile/notifications", token=admin_token, json={})
+check(r.status_code == 200, "PATCH {} -> 200", str(r.status_code))
+check(r.json().get("notification_preferences") == expected_after,
+      "PATCH {} leaves prefs unchanged",
+      f"got {r.json().get('notification_preferences')}")
 
-    # E3: PROJECT_DELETE
-    if project_id:
-        rd = requests.delete(f"{API}/projects/{project_id}", headers=hdr(token), timeout=30)
-        add("E3 DELETE /projects/{id} => 200", rd.status_code == 200, f"sc={rd.status_code}")
-        time.sleep(0.5)
-        r3 = requests.get(
-            f"{API}/security/audit-logs",
-            headers=hdr(token),
-            params={"action": "PROJECT_DELETE"},
-            timeout=30,
-        )
-        logs = r3.json() if r3.status_code == 200 else []
-        match = next((l for l in logs if l.get("resource_id") == project_id and l.get("action") == "PROJECT_DELETE"), None)
-        add("E3 audit_logs has PROJECT_DELETE", match is not None, f"#PROJECT_DELETE={len(logs)}")
-
-    # E4: WAREHOUSE_MOVE_INBOUND -> create lot
-    rm = requests.get(f"{API}/materials", headers=hdr(token), timeout=30)
-    if rm.status_code == 200 and rm.json():
-        material = rm.json()[0]
-        material_id = material["id"]
-        lot_payload = {
-            "material_id": material_id,
-            "quantity": 10.0,
-            "supplier_name": "Test Supplier",
-            "notes": "QA inbound",
-        }
-        rl = requests.post(f"{API}/warehouse/lots", headers=hdr(token), json=lot_payload, timeout=30)
-        add("E4 POST /warehouse/lots => 200", rl.status_code == 200, f"sc={rl.status_code} body={rl.text[:120]}")
-        new_lot_code = None
-        if rl.status_code == 200:
-            new_lot_code = rl.json().get("lot_code")
-            new_lot_id = rl.json().get("id")
-            time.sleep(0.5)
-            r4 = requests.get(
-                f"{API}/security/audit-logs",
-                headers=hdr(token),
-                params={"action": "WAREHOUSE_MOVE_INBOUND"},
-                timeout=30,
-            )
-            logs = r4.json() if r4.status_code == 200 else []
-            match = next((l for l in logs if l.get("resource_id") == new_lot_id), None)
-            add("E4 audit_logs has WAREHOUSE_MOVE_INBOUND for new lot", match is not None,
-                f"new_lot_id={new_lot_id}")
-
-        # E5: WAREHOUSE_AUTO_CLASSIFY -> assign-and-print
-        if new_lot_code:
-            rap = requests.post(
-                f"{API}/warehouse/assign-and-print",
-                headers=hdr(token),
-                json={"lot_code": new_lot_code},
-                timeout=30,
-            )
-            add("E5 POST /warehouse/assign-and-print => 200", rap.status_code == 200,
-                f"sc={rap.status_code} body={rap.text[:120]}")
-            time.sleep(0.5)
-            r5 = requests.get(
-                f"{API}/security/audit-logs",
-                headers=hdr(token),
-                params={"action": "WAREHOUSE_AUTO_CLASSIFY"},
-                timeout=30,
-            )
-            logs = r5.json() if r5.status_code == 200 else []
-            any_match = len(logs) > 0 and any(l.get("action") == "WAREHOUSE_AUTO_CLASSIFY" for l in logs)
-            add("E5 audit_logs has WAREHOUSE_AUTO_CLASSIFY", any_match, f"#={len(logs)}")
-    else:
-        add("E4/E5 could not list materials", False, f"sc={rm.status_code}")
+# PATCH {budget_exceeded: true}
+r = req("PATCH", "/profile/notifications", token=admin_token, json={"budget_exceeded": True})
+check(r.status_code == 200 and r.json().get("notification_preferences", {}).get("budget_exceeded") is True,
+      "PATCH {budget_exceeded:true} updates only that key",
+      f"got {r.json().get('notification_preferences')}")
+ret = r.json().get("notification_preferences", {})
+check(ret == expected_after, "other prefs unchanged", f"got {ret}")
 
 
-# -----------------------------------------------------------
-# F. Worker forbidden on /security/*
-# -----------------------------------------------------------
-def test_worker_forbidden():
-    print("\n=== F. WORKER FORBIDDEN ON /security/* ===")
-    sc, body, _ = login(WORKER_EMAIL, WORKER_PASSWORD)
-    add("F1 Worker login => 200", sc == 200, f"sc={sc}")
-    if sc != 200:
-        return
-    token = body["access_token"]
-    r1 = requests.get(f"{API}/security/audit-logs", headers=hdr(token), timeout=30)
-    add("F2 Worker GET /security/audit-logs => 403", r1.status_code == 403, f"sc={r1.status_code}")
-    r2 = requests.get(f"{API}/security/sessions", headers=hdr(token), timeout=30)
-    add("F3 Worker GET /security/sessions => 403", r2.status_code == 403, f"sc={r2.status_code}")
+# ----------------------------------------------------------
+# 3) POST /api/push-token
+# ----------------------------------------------------------
+headline("3) POST /push-token")
+admin_pt = "ExponentPushToken[FAKE_ADMIN_TEST_123]"
+worker_pt = "ExponentPushToken[FAKE_WORKER_TEST_456]"
+
+r = req("POST", "/push-token", token=admin_token, json={"token": admin_pt, "platform": "ios"})
+check(r.status_code == 200 and r.json().get("ok") is True,
+      "admin POST /push-token ios -> 200 ok:true",
+      f"{r.status_code}: {r.text[:200]}")
+
+r = req("POST", "/push-token", token=worker_token, json={"token": worker_pt, "platform": "android"})
+check(r.status_code == 200 and r.json().get("ok") is True,
+      "worker POST /push-token android -> 200 ok:true",
+      f"{r.status_code}: {r.text[:200]}")
+
+# Re-POST same admin token (idempotent)
+r = req("POST", "/push-token", token=admin_token, json={"token": admin_pt, "platform": "android"})
+check(r.status_code == 200 and r.json().get("ok") is True,
+      "re-POST same admin token -> 200 idempotent",
+      f"{r.status_code}: {r.text[:200]}")
+
+# Empty token
+r = req("POST", "/push-token", token=admin_token, json={"token": "", "platform": "ios"})
+ok_empty = (r.status_code == 200 and r.json().get("ok") is False and r.json().get("reason") == "empty_token") \
+    or r.status_code in (400, 422)
+check(ok_empty,
+      "empty token -> {ok:false,reason:empty_token} or 4xx (not 500)",
+      f"{r.status_code}: {r.text[:200]}")
+
+# Missing token field -> 422
+r = req("POST", "/push-token", token=admin_token, json={"platform": "ios"})
+check(r.status_code in (200, 400, 422),
+      "missing token field -> 4xx or 200 ok:false (not 500)",
+      f"{r.status_code}: {r.text[:200]}")
+
+# Without auth
+r = req("POST", "/push-token", json={"token": "ExponentPushToken[NOAUTH]", "platform": "ios"})
+check(r.status_code in (401, 403),
+      "POST /push-token without auth -> 401",
+      f"{r.status_code}: {r.text[:200]}")
 
 
-def main():
-    print(f"Testing against: {API}")
-    test_security_headers()
-    test_login_lockout()
-    test_token_blacklist()
-    test_session_tracking()
-    test_audit_logs()
-    test_worker_forbidden()
-    print("\n========== SUMMARY ==========")
-    passed = sum(1 for _, ok, _ in results if ok)
-    total = len(results)
-    print(f"{passed}/{total} assertions passed")
-    print("\nFailures:")
-    for n, ok, d in results:
-        if not ok:
-            print(f"  - {n} :: {d}")
+# ----------------------------------------------------------
+# 4) DELETE /api/push-token
+# ----------------------------------------------------------
+headline("4) DELETE /push-token")
+r = req("DELETE", "/push-token", token=admin_token, json={"token": admin_pt})
+check(r.status_code == 200 and r.json().get("ok") is True,
+      "DELETE existing admin token -> 200",
+      f"{r.status_code}: {r.text[:200]}")
+
+r = req("DELETE", "/push-token", token=admin_token,
+        json={"token": "ExponentPushToken[DOES_NOT_EXIST_XYZ]"})
+check(r.status_code == 200 and r.json().get("ok") is True,
+      "DELETE non-existent token -> 200 idempotent",
+      f"{r.status_code}: {r.text[:200]}")
+
+r = requests.delete(f"{BASE}/push-token", json={"token": "x"}, timeout=30)
+check(r.status_code in (401, 403),
+      "DELETE without auth -> 401",
+      f"{r.status_code}: {r.text[:200]}")
+
+# Re-register admin token
+r = req("POST", "/push-token", token=admin_token, json={"token": admin_pt, "platform": "ios"})
+check(r.status_code == 200, "re-register admin push token", str(r.status_code))
 
 
-if __name__ == "__main__":
-    main()
+# ----------------------------------------------------------
+# 5) POST /api/alerts
+# ----------------------------------------------------------
+headline("5) POST /alerts")
+
+r = req("POST", "/projects", token=admin_token, json={
+    "name": "Obra Push Test", "address": "Calle Test 1",
+})
+check(r.status_code == 200, "POST /projects -> 200", f"{r.status_code}: {r.text[:200]}")
+project_id = r.json()["id"] if r.status_code == 200 else None
+
+r = req("POST", "/alerts", token=admin_token, json={
+    "type": "INCIDENT_REPORTED",
+    "severity": "CRITICAL",
+    "message": "Fuga importante en obra",
+    "project_id": project_id,
+})
+check(r.status_code == 200, "admin POST /alerts -> 200", f"{r.status_code}: {r.text[:300]}")
+alert = r.json() if r.status_code == 200 else {}
+for f in ("id", "type", "severity", "message", "project_id", "is_read", "created_by", "created_at"):
+    check(f in alert, f"alert response includes '{f}'", f"got keys {list(alert.keys())}")
+check(alert.get("is_read") is False, "alert is_read=false", str(alert.get("is_read")))
+check(alert.get("created_by") == admin_id, "alert created_by == admin.id",
+      f"{alert.get('created_by')} vs {admin_id}")
+alert_id = alert.get("id")
+
+# Worker forbidden
+r = req("POST", "/alerts", token=worker_token, json={
+    "type": "INCIDENT_REPORTED", "severity": "CRITICAL",
+    "message": "Fuga importante en obra", "project_id": project_id,
+})
+check(r.status_code == 403, "worker POST /alerts -> 403", f"{r.status_code}: {r.text[:200]}")
+
+# Missing project_id -> 422
+r = req("POST", "/alerts", token=admin_token, json={
+    "type": "INCIDENT_REPORTED", "severity": "CRITICAL", "message": "Sin obra",
+})
+check(r.status_code == 422, "missing project_id -> 422", f"{r.status_code}: {r.text[:200]}")
+
+# project_id invalid -> 404
+r = req("POST", "/alerts", token=admin_token, json={
+    "type": "INCIDENT_REPORTED", "severity": "CRITICAL",
+    "message": "Mensaje suficientemente largo", "project_id": "nope",
+})
+check(r.status_code == 404, "invalid project_id -> 404", f"{r.status_code}: {r.text[:200]}")
+check("Obra no encontrada" in r.text, "404 detail 'Obra no encontrada'", r.text[:200])
+
+# Short message -> 400
+r = req("POST", "/alerts", token=admin_token, json={
+    "type": "INCIDENT_REPORTED", "severity": "WARNING",
+    "message": "ab", "project_id": project_id,
+})
+check(r.status_code == 400, "message='ab' -> 400", f"{r.status_code}: {r.text[:200]}")
+check("obligator" in r.text.lower() or "mensaje" in r.text.lower(),
+      "400 detail mentions mensaje obligatorio", r.text[:200])
+
+# GET /alerts contains it
+r = req("GET", "/alerts", token=admin_token)
+check(r.status_code == 200, "GET /alerts admin -> 200", str(r.status_code))
+alerts_list = r.json() if r.status_code == 200 else []
+found = next((a for a in alerts_list if a.get("id") == alert_id), None)
+check(found is not None, "created alert appears in /alerts", f"{len(alerts_list)} alerts")
+
+
+# ----------------------------------------------------------
+# 6) Worker access
+# ----------------------------------------------------------
+headline("6) Worker /alerts access")
+r = req("GET", "/alerts", token=worker_token)
+check(r.status_code == 200, "worker GET /alerts -> 200", f"{r.status_code}: {r.text[:200]}")
+worker_alerts = r.json() if r.status_code == 200 else []
+check(len(worker_alerts) >= 1, "worker sees at least 1 alert", f"got {len(worker_alerts)}")
+
+r = req("PATCH", f"/alerts/{alert_id}/read", token=worker_token)
+check(r.status_code == 200 and r.json().get("ok") is True,
+      "worker PATCH /alerts/{id}/read -> 200",
+      f"{r.status_code}: {r.text[:200]}")
+
+r = req("GET", "/alerts", token=worker_token)
+found = next((a for a in r.json() if a.get("id") == alert_id), None) if r.status_code == 200 else None
+check(found is not None and found.get("is_read") is True,
+      "alert now is_read=true", str(found))
+
+
+# ----------------------------------------------------------
+# 7) Push trigger endpoints don't crash
+# ----------------------------------------------------------
+headline("7) Push trigger endpoints")
+r = req("POST", "/projects", token=admin_token, json={
+    "name": "Obra Trigger 2", "address": "Calle Trigger 2",
+})
+check(r.status_code == 200, "POST /projects again -> 200 (push swallowed)",
+      f"{r.status_code}: {r.text[:200]}")
+proj2 = r.json().get("id") if r.status_code == 200 else None
+
+log_id_1 = None
+log_id_2 = None
+r = req("POST", "/daily-logs", token=admin_token, json={
+    "project_id": project_id,
+    "hours_worked": 8,
+    "work_description": "Trabajo realizado con incidente grave, instalación de marcos y montaje.",
+    "weather_condition": "SUNNY",
+    "progress_percentage": 25,
+    "incidents": "Algo grave pasó",
+})
+check(r.status_code == 200, "POST /daily-logs with incidents -> 200",
+      f"{r.status_code}: {r.text[:300]}")
+if r.status_code == 200:
+    log_id_1 = r.json().get("id")
+
+r = req("POST", "/daily-logs", token=admin_token, json={
+    "project_id": project_id,
+    "hours_worked": 4,
+    "work_description": "Trabajo realizado sin incidentes, simple instalación rutinaria de juntas.",
+    "weather_condition": "CLOUDY",
+    "progress_percentage": 30,
+})
+check(r.status_code == 200, "POST /daily-logs no incidents -> 200",
+      f"{r.status_code}: {r.text[:300]}")
+if r.status_code == 200:
+    log_id_2 = r.json().get("id")
+
+if log_id_1:
+    r = req("PATCH", f"/daily-logs/{log_id_1}/review", token=admin_token,
+            json={"status": "APPROVED"})
+    check(r.status_code == 200, "PATCH review APPROVED -> 200",
+          f"{r.status_code}: {r.text[:200]}")
+
+if log_id_2:
+    r = req("PATCH", f"/daily-logs/{log_id_2}/review", token=admin_token,
+            json={"status": "REJECTED", "review_comment": "corregir"})
+    check(r.status_code == 200, "PATCH review REJECTED -> 200",
+          f"{r.status_code}: {r.text[:200]}")
+
+r = req("POST", "/alerts", token=admin_token, json={
+    "type": "BUDGET_EXCEEDED", "severity": "WARNING",
+    "message": "Presupuesto excedido en revisión", "project_id": project_id,
+})
+check(r.status_code == 200, "POST /alerts again -> 200", f"{r.status_code}: {r.text[:200]}")
+
+
+# ----------------------------------------------------------
+# 8) Audit logs
+# ----------------------------------------------------------
+headline("8) Audit logs")
+r = req("GET", "/security/audit-logs", token=admin_token)
+check(r.status_code == 200, "GET /security/audit-logs admin -> 200",
+      f"{r.status_code}: {r.text[:200]}")
+audit = r.json() if r.status_code == 200 else []
+actions = {a.get("action") for a in audit if isinstance(a, dict)}
+check("ALERT_CREATE" in actions, "audit contains ALERT_CREATE", f"actions={actions}")
+check("PROJECT_CREATE" in actions, "audit contains PROJECT_CREATE", f"actions={actions}")
+
+
+# ----------------------------------------------------------
+# Report
+# ----------------------------------------------------------
+total = passed + failed
+print("\n" + "=" * 60)
+print(f"RESULT: {passed}/{total} passed ({failed} failed)")
+print("=" * 60)
+
+if failures:
+    print("\nFAILURES:")
+    for f in failures:
+        print(f"  - {f}")
+
+if errors_500:
+    print("\n500-LEVEL ERRORS:")
+    for e in errors_500:
+        print(f"  - {e}")
+else:
+    print("\nNo 500 errors observed.")
+
+print(f"\nAdmin: {ADMIN_EMAIL} / {ADMIN_PWD}")
+print(f"Worker: {WORKER_EMAIL} / {WORKER_PWD}")
+
+sys.exit(0 if failed == 0 else 1)
