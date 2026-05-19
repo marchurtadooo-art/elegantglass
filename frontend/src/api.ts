@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://site-glass-preview.preview.emergentagent.com';
 
 const ACCESS_KEY = 'gw_access';
 const REFRESH_KEY = 'gw_refresh';
