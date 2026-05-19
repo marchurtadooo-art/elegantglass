@@ -360,6 +360,24 @@ class AlertCreate(BaseModel):
 # =========================================================
 # Auth endpoints
 # =========================================================
+@api.get("/")
+async def api_root():
+    """Lightweight root — used by frontend for warm-up / health checks."""
+    return {"ok": True, "service": "glasswork-api", "ts": iso(now_utc())}
+
+
+@api.get("/health")
+async def api_health():
+    """Health check used by frontend for backend warm-up before login.
+    Verifies DB connectivity quickly (best-effort)."""
+    db_ok = True
+    try:
+        await db.command("ping")
+    except Exception:
+        db_ok = False
+    return {"ok": True, "db": db_ok, "ts": iso(now_utc())}
+
+
 @api.post("/auth/register", response_model=TokenOut)
 async def register(body: RegisterIn):
     email = body.email.lower().strip()

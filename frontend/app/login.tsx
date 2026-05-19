@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView, Platform,
   TouchableOpacity, ScrollView, ImageBackground, Alert,
@@ -12,24 +12,38 @@ import { COLORS, SPACING, TYPO } from '../src/theme';
 import { Button, Input } from '../src/ui';
 import { FadeInUp } from '../src/animations';
 import { useAuth } from '../src/auth';
+import { warmupBackend } from '../src/api';
 
 const BG = 'https://customer-assets.emergentagent.com/job_site-glass-preview/artifacts/tbs4sa2u_image.png';
 
 export default function Login() {
   const insets = useSafeAreaInsets();
   const { login, loading } = useAuth();
-  const [email, setEmail] = useState('jefe@elegantglass.es');
-  const [password, setPassword] = useState('Admin1234!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // Wake the backend container as soon as the user opens the login screen,
+  // so the actual POST /auth/login is fast and avoids cold-start 502/504.
+  useEffect(() => {
+    warmupBackend().catch(() => {});
+  }, []);
 
   const submit = async () => {
     setError(null);
+    if (!email.trim() || !password) {
+      setError('Introduce email y contraseña.');
+      return;
+    }
     try {
+      // Final warm-up just before login. Best-effort, doesn't block on failure.
+      await warmupBackend(4000);
       await login(email.trim(), password);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.replace('/');
     } catch (e: any) {
       setError(e.message || 'Error al iniciar sesión');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     }
   };
 
