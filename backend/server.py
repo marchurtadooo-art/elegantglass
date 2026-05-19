@@ -363,7 +363,7 @@ class AlertCreate(BaseModel):
 @api.get("/")
 async def api_root():
     """Lightweight root — used by frontend for warm-up / health checks."""
-    return {"ok": True, "service": "glasswork-api", "ts": iso(now_utc())}
+    return {"app": "GLASSWORK", "ok": True, "service": "glasswork-api", "ts": iso(now_utc())}
 
 
 @api.get("/health")
