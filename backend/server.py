@@ -174,10 +174,17 @@ def require_role(*roles: str):
 
 
 def strip_costs_for_worker(obj: dict, role: str) -> dict:
-    if role != "WORKER":
+    """Hide ALL financial fields from any role that is NOT ADMIN.
+    Function name kept for backwards-compat — the rule changed to ADMIN-only
+    visibility for budget, spent, remaining, unit_price, total_cost,
+    projected_final_cost and value."""
+    if role == "ADMIN":
         return obj
     out = dict(obj)
-    for k in ("budget", "spent", "remaining", "total_cost", "unit_price", "projected_final_cost"):
+    for k in (
+        "budget", "spent", "remaining",
+        "total_cost", "unit_price", "projected_final_cost", "value",
+    ):
         if k in out:
             out[k] = None
     return out
@@ -528,8 +535,8 @@ async def project_metrics(project_id: str) -> dict:
 
 def filter_project_for_role(p: dict, role: str) -> dict:
     p = serialize(p)
-    if role == "WORKER":
-        for k in ("budget", "spent", "remaining"):
+    if role != "ADMIN":
+        for k in ("budget", "spent", "remaining", "projected_final_cost"):
             if k in p:
                 p[k] = None
     return p
@@ -638,7 +645,7 @@ async def list_materials(
     out = []
     for m in mats:
         m = serialize(m)
-        if user["role"] == "WORKER":
+        if user["role"] != "ADMIN":
             m["unit_price"] = None
         out.append(m)
     return out
@@ -685,7 +692,7 @@ async def list_material_entries(
         e = serialize(e)
         mat = await db.materials.find_one({"id": e["material_id"]}, {"_id": 0})
         e["material"] = serialize(mat) if mat else None
-        if user["role"] == "WORKER":
+        if user["role"] != "ADMIN":
             e["unit_price"] = None
             e["total_cost"] = None
         out.append(e)
@@ -725,7 +732,7 @@ async def create_material_entry(body: MaterialEntryIn, user: dict = Depends(get_
     }
     await db.material_entries.insert_one(entry.copy())
     out = serialize(entry)
-    if user["role"] == "WORKER":
+    if user["role"] != "ADMIN":
         out["unit_price"] = None
         out["total_cost"] = None
     return out
@@ -1624,13 +1631,29 @@ def _build_client_project_pdf(company: dict, data: dict, manager_name: str) -> b
     hours_total = sum(float(l.get("hours_worked") or 0) for l in data["logs"])
     worker_ids = list({l.get("worker_id") for l in data["logs"] if l.get("worker_id")})
     incidents = sum(1 for l in data["logs"] if (l.get("has_incident")))
+
+    def _to_naive_date(v):
+        """Robust parse: accepts datetime, ISO string with/without TZ, plain date string."""
+        if v is None or v == "":
+            return None
+        if isinstance(v, datetime):
+            return v.replace(tzinfo=None) if v.tzinfo else v
+        if isinstance(v, str):
+            try:
+                d = datetime.fromisoformat(v.replace("Z", "+00:00"))
+                return d.replace(tzinfo=None) if d.tzinfo else d
+            except Exception:
+                # Try plain date (YYYY-MM-DD)
+                try:
+                    return datetime.strptime(v[:10], "%Y-%m-%d")
+                except Exception:
+                    return None
+        return None
+
     try:
-        days = 0
-        if p.get("start_date"):
-            sd = datetime.fromisoformat((p["start_date"] or "").replace("Z", "+00:00"))
-            ed_raw = p.get("actual_end_date") or p.get("end_date")
-            ed = datetime.fromisoformat((ed_raw or "").replace("Z", "+00:00")) if ed_raw else now_utc()
-            days = max((ed - sd).days, 0)
+        sd = _to_naive_date(p.get("start_date"))
+        ed = _to_naive_date(p.get("actual_end_date") or p.get("end_date")) or now_utc().replace(tzinfo=None)
+        days = max((ed - sd).days, 0) if sd else 0
     except Exception:
         days = 0
 
@@ -1989,7 +2012,7 @@ async def warehouse_create_lot(request: Request, body: LotCreateIn, user: dict =
     })
     out = serialize(lot)
     out["material"] = serialize(mat)
-    if user["role"] == "WORKER":
+    if user["role"] != "ADMIN":
         out["unit_price"] = None
     await audit_log(
         db, action="WAREHOUSE_MOVE_INBOUND", resource="lot", resource_id=lot["id"],
@@ -2045,7 +2068,7 @@ async def warehouse_lot_detail(lot_code: str, user: dict = Depends(get_current_u
         m["worker_name"] = (u or {}).get("name")
         enriched.append(m)
     lot["movements"] = enriched
-    if user["role"] == "WORKER":
+    if user["role"] != "ADMIN":
         lot["unit_price"] = None
     return lot
 
@@ -2147,7 +2170,7 @@ async def warehouse_stock(user: dict = Depends(get_current_user)):
             "lot_count": r["lot_count"],
             "low_stock": r["total"] < 5,  # simple threshold
         }
-        if user["role"] != "WORKER":
+        if user["role"] == "ADMIN":
             item["value"] = round(r["value"], 2)
         out.append(item)
     out.sort(key=lambda x: (x["category"], x["name"]))
@@ -2212,7 +2235,7 @@ async def warehouse_dashboard(user: dict = Depends(require_role("ADMIN", "MANAGE
         "lots_count": lots_count,
         "movements_today": movements_today,
         "low_stock_count": len(low),
-        "stock_value": stock_value,
+        "stock_value": stock_value if user["role"] == "ADMIN" else None,
         "low_stock": low[:10],
         "top_movements": top_materials,
     }
