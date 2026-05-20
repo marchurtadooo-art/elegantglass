@@ -1,0 +1,93 @@
+[{
+	"_id": {
+		"$oid": "6a05aa2466c63828572949ed"
+	},
+	"id": "117e997a-4f0f-4903-b044-7db412d0a5b0",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"manager_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"created_at": {
+		"$date": "2026-05-14T10:55:32.901Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-14T10:55:39.882Z"
+	},
+	"name": "son vida ",
+	"description": "Smbio de ventanas ",
+	"address": "Cami sin vida 13",
+	"lat": null,
+	"lng": null,
+	"status": "COMPLETED",
+	"start_date": null,
+	"end_date": "23/05/2026",
+	"actual_end_date": "2026-05-14T10:55:39.882277+00:00",
+	"budget": 15.0,
+	"client_name": "Pedro",
+	"client_phone": "680639760",
+	"client_email": "",
+	"notes": "",
+	"assigned_worker_ids": [],
+	"cover_photo": null,
+	"progress_percentage": 100
+},
+{
+	"_id": {
+		"$oid": "6a0c80237b1acf2afeb3695b"
+	},
+	"id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"manager_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"created_at": {
+		"$date": "2026-05-19T15:22:11.575Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T15:22:13.361Z"
+	},
+	"name": "Obra Push Test",
+	"description": "",
+	"address": "Calle Test 1",
+	"lat": null,
+	"lng": null,
+	"status": "PENDING",
+	"start_date": null,
+	"end_date": null,
+	"actual_end_date": null,
+	"budget": 0.0,
+	"client_name": "",
+	"client_phone": "",
+	"client_email": "",
+	"notes": "",
+	"assigned_worker_ids": [],
+	"cover_photo": null,
+	"progress_percentage": 30.0
+},
+{
+	"_id": {
+		"$oid": "6a0c80257b1acf2afeb3695f"
+	},
+	"id": "ec98d110-af2c-4ee7-bbf2-e914744d4a51",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"manager_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"created_at": {
+		"$date": "2026-05-19T15:22:13.092Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T15:22:13.092Z"
+	},
+	"name": "Obra Trigger 2",
+	"description": "",
+	"address": "Calle Trigger 2",
+	"lat": null,
+	"lng": null,
+	"status": "PENDING",
+	"start_date": null,
+	"end_date": null,
+	"actual_end_date": null,
+	"budget": 0.0,
+	"client_name": "",
+	"client_phone": "",
+	"client_email": "",
+	"notes": "",
+	"assigned_worker_ids": [],
+	"cover_photo": null
+}]
+

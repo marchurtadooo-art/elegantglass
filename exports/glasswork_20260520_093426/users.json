@@ -1,0 +1,253 @@
+[{
+	"_id": {
+		"$oid": "6a02eed27d4df58112a4e914"
+	},
+	"id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"name": "Irene",
+	"email": "oficina@elegantglass.es",
+	"password_hash": "$2b$12$qRa./6x4w2/pmKxmzGtLt.9VLK1tEioK9FrtN9CAfXI3Nn9JMe9ri",
+	"role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "654227367",
+	"avatar": null,
+	"is_active": true,
+	"created_at": {
+		"$date": "2026-05-12T09:11:46.5Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-20T00:12:50.944Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c76f2423705234ac60cf0"
+	},
+	"id": "fbedc82f-b19b-46db-911e-9f2f32a0e7db",
+	"name": "Miguel Antonio",
+	"email": "miguelantonio@elegantglass.es",
+	"password_hash": "$2b$12$Pw1CSQr6tbKifRaRGfBaHuYH2YjA/eYK52LOgDl4xQ3iUczb5ciTC",
+	"role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"created_at": {
+		"$date": "2026-05-19T14:42:58.516Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T14:42:58.516Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7710423705234ac60cf1"
+	},
+	"id": "715bc0d8-c114-49c9-8de7-66c1914043f5",
+	"name": "Gustavo Chechu",
+	"email": "gustavochechu@elegantglass.es",
+	"password_hash": "$2b$12$TEI1a6cvDqLTfqkwlNJfD.MA/q3GAhcz2pDfH6Hu3drbtAPDWPDNW",
+	"role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"created_at": {
+		"$date": "2026-05-19T14:43:28.626Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T14:43:28.626Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c772a423705234ac60cf2"
+	},
+	"id": "b7616563-e617-462e-9249-a6a462a27667",
+	"name": "Tomas Diego",
+	"email": "tomasdiego@elegantglass.es",
+	"password_hash": "$2b$12$JtdlxZzfxVS4H8z9xRybCec2HRiTVSkYgqgK5o4V7sSnjudw/A5je",
+	"role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"created_at": {
+		"$date": "2026-05-19T14:43:54.943Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T14:43:54.943Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7761423705234ac60cf3"
+	},
+	"id": "015ee6f3-a3f4-4f0f-be38-0c686714c81b",
+	"name": "J.Produccion de Corte ",
+	"email": "jproducciondecorte@elegantglass.es",
+	"password_hash": "$2b$12$qWf4JQq4HHZhVanBIAcJ3OqcAKcZ99NQ.UGAFVX3gWQRl06V7ih.W",
+	"role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"created_at": {
+		"$date": "2026-05-19T14:44:49.908Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T14:44:49.908Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7787423705234ac60cf4"
+	},
+	"id": "b82801ae-f6d0-472b-ab8b-98566891d690",
+	"name": "J.Produccion Almacen",
+	"email": "jproduccionalmacen@elegantglass.es",
+	"password_hash": "$2b$12$B8o0rzep2ZBzTXFqVsFBzu0NE/7G4ediepRdPx0P/LrJCgzr8CQuG",
+	"role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"created_at": {
+		"$date": "2026-05-19T14:45:27.27Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T14:45:27.27Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c77aa423705234ac60cf5"
+	},
+	"id": "785ebb9f-92bb-4137-ada9-c37e711d7235",
+	"name": "J.Produccion Fabrica ",
+	"email": "jproduccionfabrica@elegantglass.es",
+	"password_hash": "$2b$12$HQIyYlCU.5YML3XUT7Bj7O46SHxH7w3WXu/hxoniD2ruWHYHdIqTW",
+	"role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"created_at": {
+		"$date": "2026-05-19T14:46:02.908Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T14:46:02.908Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c801e7b1acf2afeb36953"
+	},
+	"id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"name": "Admin Test",
+	"email": "admin-pushtest+1779204126@example.com",
+	"password_hash": "$2b$12$yHEiRNjWe0W76mbBO7HtxuieA/1uH0VHfYErXU169jg2y8WOga/5.",
+	"role": "ADMIN",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"phone": "",
+	"avatar": null,
+	"is_active": true,
+	"notification_preferences": {
+		"new_alert": false,
+		"new_project": true,
+		"log_approved": true,
+		"log_rejected": false,
+		"incident_reported": true,
+		"budget_exceeded": true
+	},
+	"created_at": {
+		"$date": "2026-05-19T15:22:06.973Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T15:22:08.686Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c801f7b1acf2afeb36954"
+	},
+	"id": "877ca512-75a0-45ce-af5e-84baa8634eb1",
+	"name": "Worker Test",
+	"email": "worker-pushtest+1779204126@example.com",
+	"password_hash": "$2b$12$ARLss8.Dzbysa.mWF51CTO9okcDgx8BmpLrtMGvHOBH8i2rdTdvFC",
+	"role": "WORKER",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"phone": "",
+	"avatar": null,
+	"is_active": true,
+	"notification_preferences": {
+		"new_alert": true,
+		"new_project": true,
+		"log_approved": true,
+		"log_rejected": true,
+		"incident_reported": true,
+		"budget_exceeded": true
+	},
+	"created_at": {
+		"$date": "2026-05-19T15:22:07.387Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T15:22:07.387Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80747b1acf2afeb36967"
+	},
+	"id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"name": "Carlos Del Rio ",
+	"email": "carlos@elegantglass.es",
+	"password_hash": "$2b$12$Us9BMI.0EDfO0a/p89Peuu/nEbWmbDDMTOxsqRm64OH4bePB3kiqO",
+	"role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"notification_preferences": {
+		"new_alert": true,
+		"new_project": true,
+		"log_approved": true,
+		"log_rejected": true,
+		"incident_reported": true,
+		"budget_exceeded": true
+	},
+	"created_at": {
+		"$date": "2026-05-19T15:23:32.426Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T15:23:32.426Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80907b1acf2afeb36968"
+	},
+	"id": "d9ab2f53-6eb8-4aa4-ad50-096d30b9803f",
+	"name": "Vanessa ",
+	"email": "presupuestos@elegantglass.es",
+	"password_hash": "$2b$12$9a6soLdLFGybfP84kKwV1OdSADUrC8zrtMjKFvpTvDkdW6wIstVra",
+	"role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"phone": "680639760",
+	"avatar": null,
+	"is_active": true,
+	"notification_preferences": {
+		"new_alert": true,
+		"new_project": true,
+		"log_approved": true,
+		"log_rejected": true,
+		"incident_reported": true,
+		"budget_exceeded": true
+	},
+	"created_at": {
+		"$date": "2026-05-19T15:24:00.968Z"
+	},
+	"updated_at": {
+		"$date": "2026-05-19T15:24:00.968Z"
+	}
+}]
+

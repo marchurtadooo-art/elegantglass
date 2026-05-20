@@ -1,0 +1,1396 @@
+[{
+	"_id": {
+		"$oid": "6a0192deae26273ccda724e7"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "127.0.0.1",
+	"user_agent": "curl/7.88.1",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-11T08:27:10.289Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a01939fae26273ccda724e9"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-11T08:30:23.236Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a02ea1e8eb48898596ca5da"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "test@x.com",
+	"user_role": null,
+	"company_id": null,
+	"ip": "34.16.56.64",
+	"user_agent": "curl/7.88.1",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-12T08:51:42.607Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a02eb4f7d4df58112a4e90f"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "a@b.c",
+	"user_role": null,
+	"company_id": null,
+	"ip": "34.16.56.64",
+	"user_agent": "curl/7.88.1",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-12T08:56:47.975Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a02ede97d4df58112a4e911"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "carlos@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.108.89",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-12T09:07:53.159Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a02f0297d4df58112a4e915"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "90.160.108.89",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": null
+	},
+	"timestamp": {
+		"$date": "2026-05-12T09:17:29.91Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a049cbf1cec291640e62af2"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.125.67",
+	"user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-13T15:46:07.803Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a049ccb1cec291640e62af4"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.125.67",
+	"user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-13T15:46:19.025Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a049ced1cec291640e62af7"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "90.160.125.67",
+	"user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "cf582da2-816d-4e3e-81d3-e5bdc3fb348f"
+	},
+	"timestamp": {
+		"$date": "2026-05-13T15:46:53.414Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a05a90766c63828572949e9"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "carlos@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-14T10:50:47.861Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a05a91466c63828572949ec"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "e0c3c95c-fe03-4ef5-b358-8330c52a779a"
+	},
+	"timestamp": {
+		"$date": "2026-05-14T10:51:00.196Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a05aa2466c63828572949ee"
+	},
+	"action": "PROJECT_CREATE",
+	"resource": "project",
+	"resource_id": "117e997a-4f0f-4903-b044-7db412d0a5b0",
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/projects",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"name": "son vida "
+	},
+	"timestamp": {
+		"$date": "2026-05-14T10:55:32.907Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a56687f1af33721e52a8"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.61",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-16T17:12:06.69Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a56787f1af33721e52ab"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.61",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-16T17:12:07.382Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a57587f1af33721e52ad"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.61",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-16T17:12:21.445Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a57887f1af33721e52b0"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.61",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-16T17:12:24.539Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a58287f1af33721e52b2"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.61",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-16T17:12:34.944Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a58387f1af33721e52b5"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.61",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-16T17:12:35.834Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a5a387f1af33721e52b8"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "90.160.133.61",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "d55e0d5f-fbeb-4286-8c38-d86b0bca8071"
+	},
+	"timestamp": {
+		"$date": "2026-05-16T17:13:07.125Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c34f958737c45bf8829cc"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T10:01:29.054Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c34f958737c45bf8829cf"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T10:01:29.776Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c350058737c45bf8829d1"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T10:01:36.064Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c350058737c45bf8829d4"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T10:01:36.751Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c350858737c45bf8829d6"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T10:01:44.161Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c351d58737c45bf8829d7"
+	},
+	"action": "LOGIN_BLOCKED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {
+		"remaining_minutes": 15
+	},
+	"timestamp": {
+		"$date": "2026-05-19T10:02:05.733Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c354958737c45bf8829d8"
+	},
+	"action": "LOGIN_BLOCKED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {
+		"remaining_minutes": 14
+	},
+	"timestamp": {
+		"$date": "2026-05-19T10:02:49.263Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c368358737c45bf8829dc"
+	},
+	"action": "PROJECT_CREATE",
+	"resource": "project",
+	"resource_id": "bbcf3c54-d4fc-4c58-8731-f7e7817e437b",
+	"user_id": "9524140b-87dc-4205-89f4-d4e029dc1626",
+	"user_email": "presupuestos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "a2929772-cace-4577-9541-f8f25a112fe9",
+	"ip": "90.160.133.72",
+	"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+	"path": "/api/projects",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"name": "Kairo"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T10:08:03.705Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c36f258737c45bf8829dd"
+	},
+	"action": "LOGIN_BLOCKED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "90.160.133.72",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {
+		"remaining_minutes": 7
+	},
+	"timestamp": {
+		"$date": "2026-05-19T10:09:54.161Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c74f6423705234ac60ce6"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "a@b.c",
+	"user_role": null,
+	"company_id": null,
+	"ip": "34.16.56.64",
+	"user_agent": "curl/7.88.1",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T14:34:30.573Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7671423705234ac60ce8"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "4588f3a5-a837-41cb-a2c8-9e920518c0f4"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T14:40:49.699Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7673423705234ac60cea"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T14:40:51.059Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7688423705234ac60cec"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T14:41:12.862Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7694423705234ac60cef"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "fb370df2-8f42-4356-b6a8-f7e1a7b87c0c"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T14:41:24.575Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c801f7b1acf2afeb36957"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "877ca512-75a0-45ce-af5e-84baa8634eb1",
+	"user_email": "worker-pushtest+1779204126@example.com",
+	"user_role": "WORKER",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"ip": "34.16.56.64",
+	"user_agent": "python-requests/2.33.1",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "9ce7d617-31d4-49d2-a5a9-5698c10464ab"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T15:22:07.842Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80237b1acf2afeb3695c"
+	},
+	"action": "PROJECT_CREATE",
+	"resource": "project",
+	"resource_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3",
+	"user_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"user_email": "admin-pushtest+1779204126@example.com",
+	"user_role": "ADMIN",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"ip": "34.16.56.64",
+	"user_agent": "python-requests/2.33.1",
+	"path": "/api/projects",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"name": "Obra Push Test"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T15:22:11.576Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80237b1acf2afeb3695e"
+	},
+	"action": "ALERT_CREATE",
+	"resource": "alert",
+	"resource_id": "a417216d-fc12-402f-a3c5-6c315e709df1",
+	"user_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"user_email": "admin-pushtest+1779204126@example.com",
+	"user_role": "ADMIN",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"ip": "34.16.56.64",
+	"user_agent": "python-requests/2.33.1",
+	"path": "/api/alerts",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"type": "INCIDENT_REPORTED",
+		"severity": "CRITICAL",
+		"project_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T15:22:11.797Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80257b1acf2afeb36960"
+	},
+	"action": "PROJECT_CREATE",
+	"resource": "project",
+	"resource_id": "ec98d110-af2c-4ee7-bbf2-e914744d4a51",
+	"user_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"user_email": "admin-pushtest+1779204126@example.com",
+	"user_role": "ADMIN",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"ip": "34.16.56.64",
+	"user_agent": "python-requests/2.33.1",
+	"path": "/api/projects",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"name": "Obra Trigger 2"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T15:22:13.093Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80257b1acf2afeb36965"
+	},
+	"action": "ALERT_CREATE",
+	"resource": "alert",
+	"resource_id": "f459a221-d415-4c8c-9b6c-c7a4d2d2f79f",
+	"user_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"user_email": "admin-pushtest+1779204126@example.com",
+	"user_role": "ADMIN",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"ip": "34.16.56.64",
+	"user_agent": "python-requests/2.33.1",
+	"path": "/api/alerts",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"type": "BUDGET_EXCEEDED",
+		"severity": "WARNING",
+		"project_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T15:22:13.781Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cc14c425416b62ba0d388"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "noexiste@test.com",
+	"user_role": null,
+	"company_id": null,
+	"ip": "127.0.0.1",
+	"user_agent": "curl/7.88.1",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T20:00:12.462Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cc15d425416b62ba0d38a"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "d526a1cb-91ee-409d-a9bc-1a40cf0bbf3f"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T20:00:29.373Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cc173425416b62ba0d38d"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"user_email": "carlos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "dd3b91c5-caff-4540-8384-29f1c40e8d3e"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T20:00:51.739Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf55d7b09b1bc79199403"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "carlos@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T23:42:21.689Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf55f7b09b1bc79199405"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "carlos@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-19T23:42:23.19Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5667b09b1bc79199408"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"user_email": "carlos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "b8cbc724-ecf2-4f6e-8c62-4fe4983bbdad"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:42:30.953Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5767b09b1bc79199409"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"user_email": "carlos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "b8cbc724-ecf2-4f6e-8c62-4fe4983bbdad"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:42:46.966Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5887b09b1bc7919940c"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "d9ab2f53-6eb8-4aa4-ad50-096d30b9803f",
+	"user_email": "presupuestos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "863edbe6-e6ce-4c55-90e0-1fe3e891452f"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:43:04.227Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5917b09b1bc7919940d"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "d9ab2f53-6eb8-4aa4-ad50-096d30b9803f",
+	"user_email": "presupuestos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "863edbe6-e6ce-4c55-90e0-1fe3e891452f"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:43:13.63Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5a47b09b1bc79199410"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "d9ab2f53-6eb8-4aa4-ad50-096d30b9803f",
+	"user_email": "presupuestos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "8eb18ac4-0c8d-456f-b984-e3a90bf228a0"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:43:32.069Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf68f8237dc31935b65cd"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "d9ab2f53-6eb8-4aa4-ad50-096d30b9803f",
+	"user_email": "presupuestos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "8eb18ac4-0c8d-456f-b984-e3a90bf228a0"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:47:27.223Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf6b48237dc31935b65d0"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "fbedc82f-b19b-46db-911e-9f2f32a0e7db",
+	"user_email": "miguelantonio@elegantglass.es",
+	"user_role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "cad513db-7a50-4020-9c32-487b3e04d688"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:48:04.918Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf6d28237dc31935b65d1"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "fbedc82f-b19b-46db-911e-9f2f32a0e7db",
+	"user_email": "miguelantonio@elegantglass.es",
+	"user_role": "WORKER",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "cad513db-7a50-4020-9c32-487b3e04d688"
+	},
+	"timestamp": {
+		"$date": "2026-05-19T23:48:34.698Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfc5e8237dc31935b65d3"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "oficina@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-20T00:12:14.071Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfc668237dc31935b65d6"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "ddf80700-19f2-4d65-b558-c38f40fd9b12"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T00:12:22.99Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfd0e8237dc31935b65d7"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "ddf80700-19f2-4d65-b558-c38f40fd9b12"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T00:15:10.111Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfd218237dc31935b65da"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"user_email": "carlos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "6676b301-860a-4ceb-ac0a-a1f92efaa94f"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T00:15:29.208Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfd2e8237dc31935b65db"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"user_email": "carlos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "6676b301-860a-4ceb-ac0a-a1f92efaa94f"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T00:15:42.126Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfd318237dc31935b65dd"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "jefe@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-20T00:15:45.45Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d00b48237dc31935b65e0"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "e3386489-857f-4df4-a8fb-39671c9829c9"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T00:30:44.869Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d02218237dc31935b65e1"
+	},
+	"action": "LOGOUT",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "db4a0dc1-6887-4d8d-b5e4-754db85e4f09",
+	"user_email": "oficina@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/logout",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "e3386489-857f-4df4-a8fb-39671c9829c9"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T00:36:49.082Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d02328237dc31935b65e4"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"user_email": "carlos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "648d0438-c21a-4681-8040-ebbd51347713"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T00:37:06.747Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d721eb7246c33dae1712f"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "carlos@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-20T08:34:38.197Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d721eb7246c33dae17132"
+	},
+	"action": "LOGIN_FAILED",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": null,
+	"user_email": "carlos@elegantglass.es",
+	"user_role": null,
+	"company_id": null,
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": false,
+	"extra": {},
+	"timestamp": {
+		"$date": "2026-05-20T08:34:38.968Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d7225b7246c33dae17135"
+	},
+	"action": "LOGIN",
+	"resource": "auth",
+	"resource_id": null,
+	"user_id": "73d8d8c3-5940-4006-bcba-b8b20683fa10",
+	"user_email": "carlos@elegantglass.es",
+	"user_role": "ADMIN",
+	"company_id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"ip": "85.87.120.241",
+	"user_agent": "okhttp/4.12.0",
+	"path": "/api/auth/login",
+	"method": "POST",
+	"success": true,
+	"extra": {
+		"jti": "b69b4a2b-e1d8-47e0-a9d1-68023dde56bc"
+	},
+	"timestamp": {
+		"$date": "2026-05-20T08:34:45.75Z"
+	}
+}]
+

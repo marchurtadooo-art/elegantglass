@@ -1,0 +1,29 @@
+[{
+	"_id": {
+		"$oid": "6a02eed27d4df58112a4e913"
+	},
+	"id": "427261f8-f033-4110-a5b4-af1df2bb52d3",
+	"name": "Elegant glass ",
+	"logo": null,
+	"address": "",
+	"phone": "",
+	"email": "",
+	"created_at": {
+		"$date": "2026-05-12T09:11:46.271Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c801e7b1acf2afeb36952"
+	},
+	"id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"name": "PushTest Co",
+	"logo": null,
+	"address": "",
+	"phone": "",
+	"email": "",
+	"created_at": {
+		"$date": "2026-05-19T15:22:06.751Z"
+	}
+}]
+

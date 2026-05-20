@@ -1,0 +1,53 @@
+[{
+	"_id": {
+		"$oid": "6a0c80257b1acf2afeb36961"
+	},
+	"id": "e606a844-0218-47b2-a59c-fda164c39f95",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"project_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3",
+	"worker_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"date": "2026-05-19T15:22:13.223490+00:00",
+	"hours_worked": 8.0,
+	"work_description": "Trabajo realizado con incidente grave, instalación de marcos y montaje.",
+	"weather_condition": "SUNNY",
+	"progress_percentage": 25.0,
+	"incidents": "Algo grave pasó",
+	"photo_ids": [],
+	"material_entry_ids": [],
+	"status": "APPROVED",
+	"review_comment": "",
+	"submitted_at": {
+		"$date": "2026-05-19T15:22:13.223Z"
+	},
+	"approved_by": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"approved_at": {
+		"$date": "2026-05-19T15:22:13.488Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80257b1acf2afeb36963"
+	},
+	"id": "ca06f018-9269-4ba0-bf00-a9725fbf4ac7",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"project_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3",
+	"worker_id": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"date": "2026-05-19T15:22:13.361142+00:00",
+	"hours_worked": 4.0,
+	"work_description": "Trabajo realizado sin incidentes, simple instalación rutinaria de juntas.",
+	"weather_condition": "CLOUDY",
+	"progress_percentage": 30.0,
+	"incidents": null,
+	"photo_ids": [],
+	"material_entry_ids": [],
+	"status": "REJECTED",
+	"review_comment": "corregir",
+	"submitted_at": {
+		"$date": "2026-05-19T15:22:13.361Z"
+	},
+	"approved_by": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"approved_at": {
+		"$date": "2026-05-19T15:22:13.652Z"
+	}
+}]
+

@@ -1,0 +1,298 @@
+[{
+	"_id": {
+		"$oid": "6a0192deae26273ccda724e6"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "127.0.0.1",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-11T08:27:10.289Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a01939fae26273ccda724e8"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-11T08:30:23.235Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a02ea1e8eb48898596ca5d9"
+	},
+	"email": "test@x.com",
+	"ip": "34.16.56.64",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-12T08:51:42.599Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a02eb4f7d4df58112a4e90e"
+	},
+	"email": "a@b.c",
+	"ip": "34.16.56.64",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-12T08:56:47.974Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a049cbf1cec291640e62af1"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "90.160.125.67",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-13T15:46:07.797Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a049ced1cec291640e62af6"
+	},
+	"email": "oficina@elegantglass.es",
+	"ip": "90.160.125.67",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-13T15:46:53.413Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a05a91466c63828572949eb"
+	},
+	"email": "oficina@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-14T10:51:00.196Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a56687f1af33721e52a7"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "90.160.133.61",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-16T17:12:06.685Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a56787f1af33721e52aa"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "90.160.133.61",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-16T17:12:07.382Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a08a5a387f1af33721e52b7"
+	},
+	"email": "oficina@elegantglass.es",
+	"ip": "90.160.133.61",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-16T17:13:07.124Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c74f6423705234ac60ce5"
+	},
+	"email": "a@b.c",
+	"ip": "34.16.56.64",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-19T14:34:30.567Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7673423705234ac60ce9"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-19T14:40:51.059Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7688423705234ac60ceb"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-19T14:41:12.862Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7694423705234ac60cee"
+	},
+	"email": "oficina@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-19T14:41:24.574Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c801f7b1acf2afeb36956"
+	},
+	"email": "worker-pushtest+1779204126@example.com",
+	"ip": "34.16.56.64",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-19T15:22:07.841Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cc14c425416b62ba0d387"
+	},
+	"email": "noexiste@test.com",
+	"ip": "127.0.0.1",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-19T20:00:12.448Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cc173425416b62ba0d38c"
+	},
+	"email": "carlos@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-19T20:00:51.738Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5667b09b1bc79199407"
+	},
+	"email": "carlos@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-19T23:42:30.952Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5887b09b1bc7919940b"
+	},
+	"email": "presupuestos@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-19T23:43:04.226Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf5a47b09b1bc7919940f"
+	},
+	"email": "presupuestos@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-19T23:43:32.068Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cf6b48237dc31935b65cf"
+	},
+	"email": "miguelantonio@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-19T23:48:04.917Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfc668237dc31935b65d5"
+	},
+	"email": "oficina@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-20T00:12:22.989Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfd218237dc31935b65d9"
+	},
+	"email": "carlos@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-20T00:15:29.207Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0cfd318237dc31935b65dc"
+	},
+	"email": "jefe@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": false,
+	"timestamp": {
+		"$date": "2026-05-20T00:15:45.45Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d00b48237dc31935b65df"
+	},
+	"email": "oficina@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-20T00:30:44.868Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d02328237dc31935b65e3"
+	},
+	"email": "carlos@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-20T00:37:06.746Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0d7225b7246c33dae17134"
+	},
+	"email": "carlos@elegantglass.es",
+	"ip": "85.87.120.241",
+	"success": true,
+	"timestamp": {
+		"$date": "2026-05-20T08:34:45.749Z"
+	}
+}]
+

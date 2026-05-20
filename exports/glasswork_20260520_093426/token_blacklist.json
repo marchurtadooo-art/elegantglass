@@ -1,0 +1,42 @@
+[{
+	"_id": {
+		"$oid": "6a0c7afeed46c9f75c2b61f2"
+	},
+	"user_id_force_logout": "0bf64ef7-be98-477c-b27c-5e2e57bbf828",
+	"exp": {
+		"$date": "2026-06-18T15:00:14.825Z"
+	},
+	"reason": "ADMIN_FORCE_LOGOUT",
+	"revoked_at": {
+		"$date": "2026-05-19T15:00:14.825Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c7b20ed46c9f75c2b6202"
+	},
+	"token_hash": "295f34dd3c1a3ad972e545160fd1aaa86160bc8ae2fc519de41b5bb41f554b90",
+	"exp": {
+		"$date": "2026-06-18T15:00:48.198Z"
+	},
+	"reason": "ADMIN_FORCE_LOGOUT",
+	"revoked_at": {
+		"$date": "2026-05-19T15:00:48.198Z"
+	},
+	"user_id_force_logout": "0bf64ef7-be98-477c-b27c-5e2e57bbf828"
+},
+{
+	"_id": {
+		"$oid": "6a0c7b20ed46c9f75c2b6204"
+	},
+	"token_hash": "34c5370b36b54fa1b5e149d5a1e3abe539a8b47a6617685930c1170b5486d749",
+	"exp": {
+		"$date": "2026-06-18T15:00:48.198Z"
+	},
+	"reason": "ADMIN_FORCE_LOGOUT",
+	"revoked_at": {
+		"$date": "2026-05-19T15:00:48.198Z"
+	},
+	"user_id_force_logout": "9524140b-87dc-4205-89f4-d4e029dc1626"
+}]
+

@@ -1,0 +1,48 @@
+[{
+	"_id": {
+		"$oid": "6a0c80237b1acf2afeb3695d"
+	},
+	"id": "a417216d-fc12-402f-a3c5-6c315e709df1",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"type": "INCIDENT_REPORTED",
+	"severity": "CRITICAL",
+	"message": "Fuga importante en obra",
+	"project_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3",
+	"is_read": true,
+	"created_by": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"created_at": {
+		"$date": "2026-05-19T15:22:11.794Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80257b1acf2afeb36962"
+	},
+	"id": "69a0afa7-3c0a-4473-a417-8f57c745f3d8",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"type": "INCIDENT_REPORTED",
+	"severity": "WARNING",
+	"message": "Incidente reportado en Obra Push Test por Admin Test",
+	"project_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3",
+	"is_read": false,
+	"created_at": {
+		"$date": "2026-05-19T15:22:13.225Z"
+	}
+},
+{
+	"_id": {
+		"$oid": "6a0c80257b1acf2afeb36964"
+	},
+	"id": "f459a221-d415-4c8c-9b6c-c7a4d2d2f79f",
+	"company_id": "e43152a7-7dd1-40fb-b273-9aa671a7d093",
+	"type": "BUDGET_EXCEEDED",
+	"severity": "WARNING",
+	"message": "Presupuesto excedido en revisión",
+	"project_id": "0c9182b4-564e-4bde-bf32-2d4f285e53c3",
+	"is_read": false,
+	"created_by": "b0484911-49f1-42ed-8ea8-5c021e8d1a32",
+	"created_at": {
+		"$date": "2026-05-19T15:22:13.781Z"
+	}
+}]
+
