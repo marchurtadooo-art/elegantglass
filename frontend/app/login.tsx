@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView, Platform,
   TouchableOpacity, ScrollView, ImageBackground, Alert, useWindowDimensions, Image,
 } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop, SvgUri } from 'react-native-svg';
 import { router } from 'expo-router';
-import * as LocalAuthentication from 'expo-local-authentication';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING, TYPO } from '../src/theme';
@@ -13,6 +12,16 @@ import { Button, Input } from '../src/ui';
 import { FadeInUp } from '../src/animations';
 import { useAuth } from '../src/auth';
 import { warmupBackend } from '../src/api';
+import {
+  saveBiometricCredentials,
+  getBiometricCredentials,
+  clearBiometricCredentials,
+  hasBiometricCredentials,
+  getBiometricCapability,
+  promptBiometric,
+  biometricIconName,
+  type BiometricCapability,
+} from '../src/biometric';
 
 const BG = 'https://customer-assets.emergentagent.com/job_site-glass-preview/artifacts/tbs4sa2u_image.png';
 const LOGO = 'https://customer-assets.emergentagent.com/job_site-glass-preview/artifacts/9okeqbg5_elegantglass_logo.svg';
@@ -24,12 +33,38 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [bioBusy, setBioBusy] = useState(false);
+  const [cap, setCap] = useState<BiometricCapability | null>(null);
+  const [hasSavedCreds, setHasSavedCreds] = useState(false);
 
   // Wake the backend container as soon as the user opens the login screen,
   // so the actual POST /auth/login is fast and avoids cold-start 502/504.
   useEffect(() => {
     warmupBackend().catch(() => {});
   }, []);
+
+  // Detect device biometric capability + check if we have stored credentials
+  const refreshBioState = useCallback(async () => {
+    const [c, has] = await Promise.all([getBiometricCapability(), hasBiometricCredentials()]);
+    setCap(c);
+    setHasSavedCreds(has);
+  }, []);
+
+  useEffect(() => {
+    refreshBioState();
+  }, [refreshBioState]);
+
+  // Auto-trigger biometric prompt when arriving at login screen IF the user
+  // has already set it up before. Provides a one-tap experience.
+  useEffect(() => {
+    if (!cap?.available || !hasSavedCreds || bioBusy || loading) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (!cancelled) tryBiometricLogin(/* silent */ true);
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cap?.available, hasSavedCreds]);
 
   const submit = async () => {
     setError(null);
@@ -41,6 +76,12 @@ export default function Login() {
       // Final warm-up just before login. Best-effort, doesn't block on failure.
       await warmupBackend(4000);
       await login(email.trim(), password);
+      // Store credentials for future biometric logins (only if device supports it)
+      try {
+        if (cap?.available) {
+          await saveBiometricCredentials(email.trim(), password);
+        }
+      } catch {}
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.replace('/');
     } catch (e: any) {
@@ -49,17 +90,74 @@ export default function Login() {
     }
   };
 
-  const biometric = async () => {
+  const tryBiometricLogin = async (silent = false) => {
+    if (bioBusy || loading) return;
+    setError(null);
+
+    // No hardware / not enrolled → guide the user
+    if (!cap?.hasHardware) {
+      if (!silent) Alert.alert(
+        'Biometría no disponible',
+        'Tu dispositivo no tiene Face ID, Touch ID ni lector de huella.',
+      );
+      return;
+    }
+    if (!cap.isEnrolled) {
+      if (!silent) Alert.alert(
+        'Configura tu biometría',
+        'Activa Face ID o tu huella en los Ajustes del dispositivo antes de usar el acceso biométrico.',
+      );
+      return;
+    }
+
+    // No stored credentials yet → user must do a normal login first
+    const creds = await getBiometricCredentials();
+    if (!creds) {
+      if (!silent) Alert.alert(
+        'Activa el acceso biométrico',
+        'Inicia sesión la primera vez con tu email y contraseña. La próxima vez podrás entrar directamente con ' +
+        (cap.kind === 'face' ? 'Face ID.' : cap.kind === 'fingerprint' ? 'tu huella.' : 'biometría.'),
+      );
+      return;
+    }
+
+    setBioBusy(true);
     try {
-      const has = await LocalAuthentication.hasHardwareAsync();
-      const enrolled = has && (await LocalAuthentication.isEnrolledAsync());
-      if (!enrolled) { Alert.alert('Biometría no disponible', 'Configura FaceID o huella primero.'); return; }
-      const r = await LocalAuthentication.authenticateAsync({ promptMessage: 'Acceso GLASSWORK' });
-      if (r.success) await submit();
+      const ok = await promptBiometric(`Acceso a GLASSWORK como ${creds.email}`);
+      if (!ok) {
+        setBioBusy(false);
+        return;
+      }
+      // Biometric OK → log in silently with stored credentials
+      await warmupBackend(4000);
+      try {
+        await login(creds.email, creds.password);
+        // Refresh stored creds (password may have rotated server-side; this also re-asserts enable flag)
+        await saveBiometricCredentials(creds.email, creds.password);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        router.replace('/');
+      } catch (e: any) {
+        // Stored credentials are stale (password changed, account disabled, etc.)
+        await clearBiometricCredentials();
+        setHasSavedCreds(false);
+        setError(
+          'Las credenciales guardadas ya no son válidas. Inicia sesión con email y contraseña para reactivar el acceso biométrico.',
+        );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      }
     } catch {
-      Alert.alert('Biometría', 'No se pudo autenticar.');
+      // Authentication cancelled or failed silently
+    } finally {
+      setBioBusy(false);
     }
   };
+
+  const bioLabel = hasSavedCreds && cap?.available
+    ? cap.promptLabel
+    : (cap?.available ? 'Activar acceso biométrico' : 'Acceso biométrico');
+
+  const bioIcon = biometricIconName(cap?.kind ?? 'generic') as any;
+  const showBioButton = Platform.OS !== 'web' && cap?.hasHardware;
 
   return (
     <ImageBackground source={{ uri: BG }} style={styles.bg} resizeMode="cover">
@@ -89,7 +187,6 @@ export default function Login() {
           <View style={styles.brand}>
             <View style={styles.logoBox}>
               {Platform.OS === 'web' ? (
-                // On web, browsers handle SVG natively via <img>; this is the most reliable path.
                 <Image source={{ uri: LOGO }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
               ) : (
                 <SvgUri uri={LOGO} width="100%" height="100%" />
@@ -128,8 +225,20 @@ export default function Login() {
               />
               {error ? <Text style={{ color: COLORS.danger, marginBottom: SPACING.md, textAlign: 'center' }} testID="login-error">{error}</Text> : null}
               <Button title="Entrar" onPress={submit} loading={loading} testID="login-submit" style={styles.pillBtn} />
-              <View style={{ height: SPACING.sm }} />
-              <Button title="Acceso biométrico" variant="ghost" icon="finger-print-outline" onPress={biometric} testID="login-biometric" style={styles.pillBtnGhost} />
+              {showBioButton ? (
+                <>
+                  <View style={{ height: SPACING.sm }} />
+                  <Button
+                    title={bioLabel}
+                    variant="ghost"
+                    icon={bioIcon}
+                    onPress={() => tryBiometricLogin(false)}
+                    loading={bioBusy}
+                    testID="login-biometric"
+                    style={styles.pillBtnGhost}
+                  />
+                </>
+              ) : null}
               <TouchableOpacity onPress={() => router.push('/forgot-password')} style={{ marginTop: SPACING.md }} testID="goto-forgot">
                 <Text style={[TYPO.body, { textAlign: 'center', color: COLORS.textSecondary, textDecorationLine: 'underline' }]}>¿Olvidaste tu contraseña?</Text>
               </TouchableOpacity>
@@ -164,7 +273,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    // Soft glow under logo for that premium feel
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.45,
@@ -200,7 +308,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginTop: SPACING.xxl,
     marginBottom: SPACING.lg,
-    // More pronounced shadow for premium depth
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.28,
