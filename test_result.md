@@ -276,6 +276,17 @@ test_plan:
   test_priority: "high_first"
 
 backend:
+  - task: "Warehouse dashboard rewrite (GET /api/warehouse/dashboard) — lots_count + stock_value desde storage_locations"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Reescrito GET /api/warehouse/dashboard. Antes 'lots_count' contaba solo material_lots no DEPLETED (vacío) y 'stock_value' agregaba unit_price desde lots — por eso el panel del almacén mostraba 0 lotes y 0€. Ahora: lots_count = (positions con storage_locations.quantity>0) + legacy material_lots; stock_value via $lookup storage_locations→materials.unit_price + legacy lots. top_movements agrupa por material_id (no lot_id) para que muestre movimientos del flujo de mapa también. Ahora el panel se actualiza al instante con cada movimiento del mapa."
   - task: "Warehouse stock aggregation rewrite (GET /api/warehouse/stock)"
     implemented: true
     working: true

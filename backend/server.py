@@ -2759,31 +2759,63 @@ async def warehouse_movements(
 async def warehouse_dashboard(user: dict = Depends(require_role("ADMIN", "MANAGER"))):
     cid = user["company_id"]
     today = datetime(now_utc().year, now_utc().month, now_utc().day, tzinfo=timezone.utc)
-    lots_count = await db.material_lots.count_documents({"company_id": cid, "status": {"$ne": "DEPLETED"}})
+
+    # Active storage positions (replaces "lots_count" — the map flow uses storage_locations).
+    # Legacy lots are added on top for backwards compatibility.
+    positions_count = await db.storage_locations.count_documents(
+        {"company_id": cid, "quantity": {"$gt": 0}}
+    )
+    legacy_lots_count = await db.material_lots.count_documents(
+        {"company_id": cid, "status": {"$ne": "DEPLETED"}}
+    )
+    lots_count = positions_count + legacy_lots_count
+
     movements_today = await db.lot_movements.count_documents({"company_id": cid, "timestamp": {"$gte": today}})
-    val_pipe = [
+
+    # Stock value: storage_locations.quantity × materials.unit_price (via $lookup) + legacy lots
+    loc_value_pipe = [
+        {"$match": {"company_id": cid, "quantity": {"$gt": 0}}},
+        {"$lookup": {
+            "from": "materials", "localField": "material_id", "foreignField": "id",
+            "as": "mat",
+        }},
+        {"$unwind": {"path": "$mat", "preserveNullAndEmptyArrays": True}},
+        {"$group": {"_id": None, "v": {"$sum": {"$multiply": ["$quantity", {"$ifNull": ["$mat.unit_price", 0]}]}}}},
+    ]
+    loc_val = await db.storage_locations.aggregate(loc_value_pipe).to_list(1)
+    legacy_val_pipe = [
         {"$match": {"company_id": cid, "status": {"$ne": "DEPLETED"}}},
         {"$group": {"_id": None, "v": {"$sum": {"$multiply": ["$quantity_left", "$unit_price"]}}}},
     ]
-    val_res = await db.material_lots.aggregate(val_pipe).to_list(1)
-    stock_value = round(val_res[0]["v"], 2) if val_res else 0
+    legacy_val = await db.material_lots.aggregate(legacy_val_pipe).to_list(1)
+    stock_value = round(
+        (loc_val[0]["v"] if loc_val else 0) + (legacy_val[0]["v"] if legacy_val else 0), 2
+    )
+
     stock = await warehouse_stock(user)  # type: ignore
     low = [s for s in stock if s.get("low_stock")]
-    # top 10 by movements this week
+
+    # Top movements this week — by material (works for both location and lot movements)
     week_start = now_utc() - timedelta(days=7)
     top_pipe = [
         {"$match": {"company_id": cid, "timestamp": {"$gte": week_start}}},
-        {"$group": {"_id": "$lot_id", "n": {"$sum": 1}}},
+        {"$group": {"_id": "$material_id", "n": {"$sum": 1}, "last_code": {"$last": "$material_code"}}},
         {"$sort": {"n": -1}},
         {"$limit": 10},
     ]
     tops = await db.lot_movements.aggregate(top_pipe).to_list(10)
     top_materials = []
     for t in tops:
-        lot = await db.material_lots.find_one({"id": t["_id"]}, {"_id": 0, "material_id": 1, "lot_code": 1})
-        if not lot: continue
-        m = await db.materials.find_one({"id": lot["material_id"]}, {"_id": 0, "name": 1})
-        top_materials.append({"lot_code": lot["lot_code"], "material_name": (m or {}).get("name"), "movements": t["n"]})
+        mid = t.get("_id")
+        if not mid:
+            continue
+        m = await db.materials.find_one({"id": mid}, {"_id": 0, "name": 1, "code": 1})
+        top_materials.append({
+            "lot_code": t.get("last_code") or (m or {}).get("code") or "—",
+            "material_name": (m or {}).get("name"),
+            "movements": t["n"],
+        })
+
     return {
         "lots_count": lots_count,
         "movements_today": movements_today,
