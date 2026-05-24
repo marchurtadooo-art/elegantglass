@@ -54,10 +54,11 @@ const STATUS: Record<string, StatusColor> = {
 export default function WarehouseMap() {
   const insets = useSafeAreaInsets();
   const { width: winW } = useWindowDimensions();
-  const params = useLocalSearchParams<{ qr?: string }>();
+  const params = useLocalSearchParams<{ qr?: string; zoneNumber?: string }>();
   const [locs, setLocs] = useState<Loc[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [active, setActive] = useState<Loc | null>(null);
+  const [zoneFilter, setZoneFilter] = useState<number | null>(null);
 
   const isTablet = winW >= 700;
   const cellW = isTablet ? '24%' : '48%';
@@ -81,28 +82,36 @@ export default function WarehouseMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.qr, locs?.length]));
 
+  // Apply ?zoneNumber=X (from scanning a zone QR) — filter the map to that zone
+  useFocusEffect(useCallback(() => {
+    if (params?.zoneNumber == null) return;
+    const n = parseInt(String(params.zoneNumber), 10);
+    if (!Number.isNaN(n)) setZoneFilter(n);
+  }, [params?.zoneNumber]));
+
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const byZone = useMemo(() => {
     const map: Record<number, { zone_id: string; zone_number: number; zone_name: string; items: Loc[] }> = {};
     (locs || []).forEach((l) => {
+      if (zoneFilter != null && l.zone_number !== zoneFilter) return;
       const z = map[l.zone_number] = map[l.zone_number] || {
         zone_id: l.zone_id, zone_number: l.zone_number, zone_name: l.zone_name, items: [],
       };
       z.items.push(l);
     });
     return Object.values(map).sort((a, b) => a.zone_number - b.zone_number);
-  }, [locs]);
+  }, [locs, zoneFilter]);
 
   const stats = useMemo(() => {
-    const items = locs || [];
+    const items = (locs || []).filter((l) => zoneFilter == null || l.zone_number === zoneFilter);
     return {
       total: items.length,
       ok: items.filter((l) => l.status === 'OK').length,
       low: items.filter((l) => l.status === 'LOW').length,
       out: items.filter((l) => l.status === 'OUT').length,
     };
-  }, [locs]);
+  }, [locs, zoneFilter]);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
@@ -137,6 +146,21 @@ export default function WarehouseMap() {
             <Stat label="Stock bajo" value={stats.low} color={STATUS.LOW.tag} />
             <Stat label="Agotado" value={stats.out} color={STATUS.OUT.tag} />
           </View>
+
+          {zoneFilter != null && (
+            <TouchableOpacity
+              onPress={() => setZoneFilter(null)}
+              activeOpacity={0.85}
+              style={styles.zoneFilterBanner}
+              testID="zone-filter-clear"
+            >
+              <Icon name="filter" size={16} color={COLORS.primary} />
+              <Text style={styles.zoneFilterText}>
+                Filtrado por <Text style={{ fontWeight: '900' }}>Zona Z{zoneFilter}</Text> · pulsa para ver todas
+              </Text>
+              <Icon name="close-circle" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          )}
 
           {byZone.map((z) => (
             <View key={z.zone_number} style={{ marginTop: SPACING.lg }}>
@@ -428,6 +452,14 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 26, fontWeight: '900', color: COLORS.textPrimary },
   statLabel: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2, letterSpacing: 0.3 },
+
+  zoneFilterBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.primary + '14',
+    borderWidth: 1, borderColor: COLORS.primary + '55',
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, marginBottom: SPACING.md,
+  },
+  zoneFilterText: { flex: 1, color: COLORS.textPrimary, fontSize: 13 },
 
   zoneHeader: {
     flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4,

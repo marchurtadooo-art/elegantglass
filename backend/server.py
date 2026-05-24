@@ -2631,9 +2631,36 @@ async def warehouse_adjust(request: Request, lot_code: str, body: AdjustIn, user
 
 @api.get("/warehouse/stock")
 async def warehouse_stock(user: dict = Depends(get_current_user)):
-    """Aggregated stock per material (sum quantity_left across lots)."""
-    pipe = [
-        {"$match": {"company_id": user["company_id"], "status": {"$ne": "DEPLETED"}}},
+    """Aggregated stock per material — combines lots (legacy) AND storage_locations (map flow).
+
+    The map UI updates `storage_locations.quantity` directly so its data must be reflected
+    here as the primary source. We additionally include any non-depleted `material_lots`
+    rows to remain backwards compatible with the older receive flow.
+    """
+    cid = user["company_id"]
+    totals: dict = {}  # material_id -> {total, lot_count (=positions), min_total}
+
+    # 1) Primary: storage_locations (where the map flow actually writes)
+    locs_pipe = [
+        {"$match": {"company_id": cid}},
+        {"$group": {
+            "_id": "$material_id",
+            "total": {"$sum": "$quantity"},
+            "lot_count": {"$sum": 1},
+            "min_total": {"$sum": "$min_quantity"},
+        }},
+    ]
+    for r in await db.storage_locations.aggregate(locs_pipe).to_list(5000):
+        totals[r["_id"]] = {
+            "total": float(r["total"] or 0),
+            "lot_count": int(r["lot_count"] or 0),
+            "min_total": float(r["min_total"] or 0),
+            "value": 0.0,
+        }
+
+    # 2) Legacy: material_lots (if any non-depleted records exist)
+    lots_pipe = [
+        {"$match": {"company_id": cid, "status": {"$ne": "DEPLETED"}}},
         {"$group": {
             "_id": "$material_id",
             "total": {"$sum": "$quantity_left"},
@@ -2641,25 +2668,66 @@ async def warehouse_stock(user: dict = Depends(get_current_user)):
             "value": {"$sum": {"$multiply": ["$quantity_left", "$unit_price"]}},
         }},
     ]
-    rows = await db.material_lots.aggregate(pipe).to_list(2000)
+    for r in await db.material_lots.aggregate(lots_pipe).to_list(2000):
+        cur = totals.setdefault(r["_id"], {"total": 0.0, "lot_count": 0, "min_total": 0.0, "value": 0.0})
+        cur["total"] += float(r["total"] or 0)
+        cur["lot_count"] += int(r["lot_count"] or 0)
+        cur["value"] += float(r["value"] or 0)
+
+    if not totals:
+        return []
+
+    # 3) Hydrate materials in one query
+    mids = list(totals.keys())
+    mats = await db.materials.find({"id": {"$in": mids}}, {"_id": 0}).to_list(len(mids))
+    mat_by_id = {m["id"]: m for m in mats}
+
     out = []
-    for r in rows:
-        m = await db.materials.find_one({"id": r["_id"]}, {"_id": 0})
-        if not m: continue
+    for mid, agg in totals.items():
+        m = mat_by_id.get(mid)
+        if not m:
+            continue
+        # Low stock: either total ≤ aggregated min (if defined) or below default threshold
+        threshold = agg["min_total"] if agg["min_total"] > 0 else 5
         item = {
-            "material_id": r["_id"],
-            "name": m.get("name"),
-            "category": m.get("category"),
-            "unit": m.get("unit"),
-            "total": round(r["total"], 2),
-            "lot_count": r["lot_count"],
-            "low_stock": r["total"] < 5,  # simple threshold
+            "material_id": mid,
+            "name": m.get("name") or m.get("code") or "—",
+            "category": m.get("category") or "OTROS",
+            "unit": m.get("unit") or "u",
+            "total": round(agg["total"], 2),
+            "lot_count": agg["lot_count"],  # number of physical positions/lots
+            "low_stock": agg["total"] <= threshold and agg["total"] >= 0,
         }
         if user["role"] == "ADMIN":
-            item["value"] = round(r["value"], 2)
+            item["value"] = round(agg["value"], 2)
         out.append(item)
     out.sort(key=lambda x: (x["category"], x["name"]))
     return out
+
+
+@api.get("/warehouse/zones/by-qr/{qr_code}")
+async def warehouse_zone_by_qr(qr_code: str, user: dict = Depends(get_current_user)):
+    """Resolve a zone QR (GW-ZONE-XXXXXXXX) to its zone + all locations inside.
+
+    Used by the mobile scanner: scan a zone label and immediately see all
+    materials stored in that zone with stock for quick IN/OUT.
+    """
+    z = await db.storage_zones.find_one(
+        {"company_id": user["company_id"], "qr_code": qr_code}, {"_id": 0}
+    )
+    if not z:
+        raise HTTPException(status_code=404, detail="Zona no encontrada")
+    locs = await db.storage_locations.find(
+        {"company_id": user["company_id"], "zone_id": z["id"]}, {"_id": 0}
+    ).sort("row_number", 1).to_list(500)
+    # Hydrate material info
+    mids = list({l["material_id"] for l in locs if l.get("material_id")})
+    mats = await db.materials.find({"id": {"$in": mids}}, {"_id": 0}).to_list(len(mids)) if mids else []
+    mat_by_id = {m["id"]: m for m in mats}
+    for l in locs:
+        l["status"] = _loc_status(l.get("quantity", 0), l.get("min_quantity", 0))
+        l["material"] = mat_by_id.get(l.get("material_id")) or {"name": "", "unit": "", "code": l.get("material_code", "")}
+    return {"zone": z, "locations": locs}
 
 
 @api.get("/warehouse/movements")

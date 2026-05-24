@@ -1,400 +1,356 @@
-"""GLASSWORK push-notifications backend test suite.
+"""Backend tests — Warehouse stock rewrite + new zones/by-qr endpoint.
 
-Tests the new push-notification system endpoints against the live preview backend.
+Targets:
+  1. GET /api/warehouse/stock — now aggregates from storage_locations primarily
+  2. GET /api/warehouse/zones/by-qr/{qr_code} — new endpoint for GW-ZONE-XXXXXXXX
 """
-import os
+
+from __future__ import annotations
 import sys
 import time
-import json
+import uuid
 import requests
-from typing import Optional
-
-BASE = "https://site-glass-preview.preview.emergentagent.com/api"
-
-TS = int(time.time())
-ADMIN_EMAIL = f"admin-pushtest+{TS}@example.com"
-ADMIN_PWD = "Admin1234!"
-WORKER_EMAIL = f"worker-pushtest+{TS}@example.com"
-WORKER_PWD = "Worker1234!"
-
-passed = 0
-failed = 0
-failures: list = []
-errors_500: list = []
 
 
-def check(cond: bool, label: str, info: str = ""):
-    global passed, failed
-    if cond:
-        passed += 1
-        print(f"  ok  {label}")
-    else:
-        failed += 1
-        failures.append(f"{label} :: {info}")
-        print(f"  FAIL {label} :: {info}")
-
-
-def req(method: str, path: str, token: Optional[str] = None, **kw):
-    url = f"{BASE}{path}"
-    headers = kw.pop("headers", {}) or {}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+def _resolve_base() -> str:
+    env_path = "/app/frontend/.env"
+    backend_url = None
     try:
-        r = requests.request(method, url, headers=headers, timeout=30, **kw)
-        if r.status_code >= 500:
-            errors_500.append(f"{method} {path} -> {r.status_code}: {r.text[:300]}")
-        return r
-    except Exception as e:
-        errors_500.append(f"{method} {path} -> EXC: {e}")
-        raise
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("EXPO_PUBLIC_BACKEND_URL="):
+                    backend_url = line.strip().split("=", 1)[1].strip().strip('"')
+                    break
+    except Exception:
+        pass
+    if not backend_url:
+        backend_url = "http://localhost:8001"
+    return backend_url.rstrip("/") + "/api"
 
 
-def headline(label: str):
-    print(f"\n=== {label} ===")
+BASE = _resolve_base()
+print(f"[setup] BASE = {BASE}")
+
+results = []  # list[ (label, ok, detail) ]
 
 
-# ----------------------------------------------------------
-# Setup
-# ----------------------------------------------------------
-headline("Setup — register admin and create worker")
+def record(label, ok, detail=""):
+    status = "PASS" if ok else "FAIL"
+    print(f"  [{status}] {label} — {detail}" if detail else f"  [{status}] {label}")
+    results.append((label, ok, detail))
 
-r = req("POST", "/auth/register", json={
-    "name": "Admin Test",
-    "email": ADMIN_EMAIL,
-    "password": ADMIN_PWD,
-    "company_name": "PushTest Co",
-})
-check(r.status_code == 200, "POST /auth/register admin -> 200", f"got {r.status_code}: {r.text[:200]}")
+
+def _post(path, **kw):
+    return requests.post(BASE + path, timeout=30, **kw)
+
+
+def _get(path, **kw):
+    return requests.get(BASE + path, timeout=30, **kw)
+
+
+def _h(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+print("\n=== SETUP: register fresh tenant ===")
+unique = f"{int(time.time())}-{uuid.uuid4().hex[:6]}"
+admin_email = f"admin-wh-test+{unique}@example.com"
+admin_pwd = "AdminTest1234!"
+worker_email = f"worker-wh-test+{unique}@example.com"
+worker_pwd = "WorkerTest1234!"
+
+r = _post(
+    "/auth/register",
+    json={
+        "email": admin_email,
+        "password": admin_pwd,
+        "name": "Pablo Admin Warehouse",
+        "company_name": f"Vidrios Pablo {unique[:6]}",
+    },
+)
 if r.status_code != 200:
-    print("Cannot continue without admin token. Aborting.")
+    print(f"[FATAL] register failed: {r.status_code} {r.text[:500]}")
     sys.exit(1)
-data = r.json()
-admin_token = data["access_token"]
-admin_user = data["user"]
-admin_id = admin_user["id"]
-check("notification_preferences" in admin_user,
-      "register response includes notification_preferences", str(list(admin_user.keys())))
-prefs = admin_user.get("notification_preferences") or {}
-expected_defaults = {
-    "new_alert": True, "new_project": True, "log_approved": True,
-    "log_rejected": True, "incident_reported": True, "budget_exceeded": True,
+admin_token = r.json()["access_token"]
+print(f"[setup] admin registered → {admin_email}")
+
+r = _post(
+    "/users",
+    headers=_h(admin_token),
+    json={
+        "email": worker_email,
+        "password": worker_pwd,
+        "name": "Carlos Worker Warehouse",
+        "role": "WORKER",
+        "phone": "+34 600 111 222",
+    },
+)
+if r.status_code != 200:
+    print(f"[FATAL] create worker failed: {r.status_code} {r.text[:500]}")
+    sys.exit(1)
+
+r = _post("/auth/login", json={"email": worker_email, "password": worker_pwd})
+if r.status_code != 200:
+    print(f"[FATAL] worker login failed: {r.status_code} {r.text[:500]}")
+    sys.exit(1)
+worker_token = r.json()["access_token"]
+print(f"[setup] worker created and logged in → {worker_email}")
+
+
+print("\n=== TEST 1 — GET /api/warehouse/stock (rewritten) ===")
+
+# 1.0 With empty data, must not 500
+r = _get("/warehouse/stock", headers=_h(admin_token))
+record(
+    "1.0 GET /warehouse/stock with empty data returns 200 (not 500) and a list",
+    r.status_code == 200 and isinstance(r.json(), list),
+    f"status={r.status_code} body_type={type(r.json()).__name__ if r.ok else r.text[:200]}",
+)
+
+# 1.1 Import minimal warehouse
+import_payload = {
+    "materials": [
+        {
+            "code": "COR70-IND-3MT-RAL9005",
+            "name": "Perfil COR 70 Industrial RAL 9005 — 3m",
+            "category": "PERFILERIA",
+            "unit": "m",
+            "supplier": "Cortizo",
+            "family": "COR 70 INDUSTRIAL",
+        },
+        {
+            "code": "VID-CLIMA-4-16-4",
+            "name": "Vidrio Climalit 4/16/4",
+            "category": "VIDRIO",
+            "unit": "m2",
+            "supplier": "Saint-Gobain",
+            "family": "CLIMALIT",
+        },
+    ],
+    "zones": [
+        {"zone_number": 1, "name": "Zona A — Perfilería", "category": "PERFILERIA", "row_count": 4},
+        {"zone_number": 2, "name": "Zona B — Vidrio", "category": "VIDRIO", "row_count": 3},
+    ],
+    "locations": [
+        {"zone_number": 1, "row_number": 1, "material_code": "COR70-IND-3MT-RAL9005", "quantity": 0, "min_quantity": 5},
+        {"zone_number": 1, "row_number": 2, "material_code": "COR70-IND-3MT-RAL9005", "quantity": 8, "min_quantity": 5},
+        {"zone_number": 2, "row_number": 1, "material_code": "VID-CLIMA-4-16-4", "quantity": 12, "min_quantity": 2},
+    ],
+    "wipe_existing_materials": False,
 }
-check(prefs == expected_defaults,
-      "admin default notification_preferences match exactly 6 keys all true",
-      f"got {prefs}")
+r = _post("/warehouse/import-locations", headers=_h(admin_token), json=import_payload)
+import_ok = r.status_code == 200 and r.json().get("locations", 0) == 3
+record(
+    "1.1 POST /warehouse/import-locations imports 2 materials, 2 zones, 3 locations",
+    import_ok,
+    f"status={r.status_code} body={r.text[:200]}",
+)
+if not import_ok:
+    print("[FATAL] cannot continue without import")
+    sys.exit(1)
 
-# Create worker (admin only)
-r = req("POST", "/users", token=admin_token, json={
-    "name": "Worker Test",
-    "email": WORKER_EMAIL,
-    "password": WORKER_PWD,
-    "role": "WORKER",
-})
-check(r.status_code == 200, "POST /users worker (admin) -> 200", f"got {r.status_code}: {r.text[:200]}")
-worker_user = r.json() if r.status_code == 200 else {}
-worker_id = worker_user.get("id")
-check(worker_user.get("notification_preferences") == expected_defaults,
-      "worker default notification_preferences match defaults",
-      f"got {worker_user.get('notification_preferences')}")
+# 1.2 Locate target
+r = _get("/warehouse/locations", headers=_h(admin_token))
+locs = r.json() if r.ok else []
+loc_perf_empty = next(
+    (l for l in locs if l.get("zone_number") == 1 and l.get("row_number") == 1),
+    None,
+)
+loc_perf_filled = next(
+    (l for l in locs if l.get("zone_number") == 1 and l.get("row_number") == 2),
+    None,
+)
+record(
+    "1.2 GET /warehouse/locations returns 3 locations including the target row",
+    r.status_code == 200 and len(locs) == 3 and loc_perf_empty is not None,
+    f"status={r.status_code} count={len(locs)}",
+)
+target_loc_id = loc_perf_empty["id"]
+target_material_id = loc_perf_empty["material_id"]
 
-# Login as worker
-r = req("POST", "/auth/login", json={"email": WORKER_EMAIL, "password": WORKER_PWD})
-check(r.status_code == 200, "POST /auth/login worker -> 200", f"{r.status_code}: {r.text[:200]}")
-worker_token = r.json()["access_token"] if r.status_code == 200 else None
+# 1.3 +25 delta
+r = _post(
+    f"/warehouse/locations/{target_loc_id}/stock",
+    headers=_h(admin_token),
+    json={"delta": 25, "note": "Test initial load"},
+)
+record(
+    "1.3 POST /warehouse/locations/{id}/stock delta=+25 returns 200 with quantity=25",
+    r.status_code == 200 and abs(r.json().get("quantity", 0) - 25) < 1e-6,
+    f"status={r.status_code} body={r.text[:200]}",
+)
 
+# 1.4-1.8 admin stock
+r = _get("/warehouse/stock", headers=_h(admin_token))
+stock_admin = r.json() if r.ok else []
+perfileria_item = next((i for i in stock_admin if i.get("material_id") == target_material_id), None)
+expected_total = 25 + (loc_perf_filled.get("quantity", 0) if loc_perf_filled else 0)
+shape_keys = {"material_id", "name", "category", "unit", "total", "lot_count", "low_stock"}
+shape_ok = perfileria_item is not None and shape_keys.issubset(set(perfileria_item.keys()))
+total_ok = perfileria_item is not None and perfileria_item.get("total", 0) >= 25
+lot_count_ok = perfileria_item is not None and perfileria_item.get("lot_count", 0) >= 1
+record(
+    "1.4 GET /warehouse/stock (admin) returns non-empty array",
+    r.status_code == 200 and isinstance(stock_admin, list) and len(stock_admin) > 0,
+    f"status={r.status_code} items={len(stock_admin)}",
+)
+record(
+    "1.5 Stock item has required shape {material_id,name,category,unit,total,lot_count,low_stock}",
+    shape_ok,
+    f"keys_present={sorted(perfileria_item.keys()) if perfileria_item else 'MISSING'}",
+)
+record(
+    "1.6 Stock item total >= 25 for the material that received +25 delta",
+    total_ok,
+    f"total={perfileria_item.get('total') if perfileria_item else 'N/A'} (expected_aggregate={expected_total})",
+)
+record(
+    "1.7 Stock item lot_count >= 1 for that material",
+    lot_count_ok,
+    f"lot_count={perfileria_item.get('lot_count') if perfileria_item else 'N/A'}",
+)
+admin_value_ok = all("value" in i for i in stock_admin)
+record(
+    "1.8 ADMIN stock items include `value` field",
+    admin_value_ok,
+    f"sample_keys={sorted(stock_admin[0].keys()) if stock_admin else 'empty'}",
+)
 
-# ----------------------------------------------------------
-# 1) /auth/me default prefs
-# ----------------------------------------------------------
-headline("1) GET /auth/me default prefs")
-r = req("GET", "/auth/me", token=admin_token)
-check(r.status_code == 200, "GET /auth/me admin -> 200", str(r.status_code))
-me = r.json() if r.status_code == 200 else {}
-check(me.get("notification_preferences") == expected_defaults,
-      "/auth/me admin prefs match defaults",
-      f"got {me.get('notification_preferences')}")
+# 1.9 no token
+r = _get("/warehouse/stock")
+record(
+    "1.9 GET /warehouse/stock without token → 401",
+    r.status_code in (401, 403),
+    f"status={r.status_code}",
+)
 
+# 1.10 worker
+r = _get("/warehouse/stock", headers=_h(worker_token))
+stock_worker = r.json() if r.ok else []
+worker_no_value = all("value" not in i for i in stock_worker) if stock_worker else False
+record(
+    "1.10 GET /warehouse/stock (worker) returns 200 and items DO NOT include `value`",
+    r.status_code == 200 and isinstance(stock_worker, list) and len(stock_worker) > 0 and worker_no_value,
+    f"status={r.status_code} items={len(stock_worker)} no_value={worker_no_value} sample_keys={sorted(stock_worker[0].keys()) if stock_worker else 'empty'}",
+)
 
-# ----------------------------------------------------------
-# 2) PATCH /api/profile/notifications
-# ----------------------------------------------------------
-headline("2) PATCH /profile/notifications")
-r = req("PATCH", "/profile/notifications", token=admin_token,
-        json={"new_alert": False, "log_rejected": False})
-check(r.status_code == 200, "PATCH prefs -> 200", str(r.status_code))
-patched_prefs = r.json().get("notification_preferences") if r.status_code == 200 else {}
-expected_after = {
-    "new_alert": False, "new_project": True, "log_approved": True,
-    "log_rejected": False, "incident_reported": True, "budget_exceeded": True,
-}
-check(patched_prefs == expected_after,
-      "patched prefs reflect change",
-      f"got {patched_prefs}")
-
-r = req("GET", "/auth/me", token=admin_token)
-check(r.status_code == 200 and r.json().get("notification_preferences") == expected_after,
-      "/auth/me reflects patched prefs", f"got {r.json().get('notification_preferences')}")
-
-# PATCH {} -> leaves unchanged
-r = req("PATCH", "/profile/notifications", token=admin_token, json={})
-check(r.status_code == 200, "PATCH {} -> 200", str(r.status_code))
-check(r.json().get("notification_preferences") == expected_after,
-      "PATCH {} leaves prefs unchanged",
-      f"got {r.json().get('notification_preferences')}")
-
-# PATCH {budget_exceeded: true}
-r = req("PATCH", "/profile/notifications", token=admin_token, json={"budget_exceeded": True})
-check(r.status_code == 200 and r.json().get("notification_preferences", {}).get("budget_exceeded") is True,
-      "PATCH {budget_exceeded:true} updates only that key",
-      f"got {r.json().get('notification_preferences')}")
-ret = r.json().get("notification_preferences", {})
-check(ret == expected_after, "other prefs unchanged", f"got {ret}")
-
-
-# ----------------------------------------------------------
-# 3) POST /api/push-token
-# ----------------------------------------------------------
-headline("3) POST /push-token")
-admin_pt = "ExponentPushToken[FAKE_ADMIN_TEST_123]"
-worker_pt = "ExponentPushToken[FAKE_WORKER_TEST_456]"
-
-r = req("POST", "/push-token", token=admin_token, json={"token": admin_pt, "platform": "ios"})
-check(r.status_code == 200 and r.json().get("ok") is True,
-      "admin POST /push-token ios -> 200 ok:true",
-      f"{r.status_code}: {r.text[:200]}")
-
-r = req("POST", "/push-token", token=worker_token, json={"token": worker_pt, "platform": "android"})
-check(r.status_code == 200 and r.json().get("ok") is True,
-      "worker POST /push-token android -> 200 ok:true",
-      f"{r.status_code}: {r.text[:200]}")
-
-# Re-POST same admin token (idempotent)
-r = req("POST", "/push-token", token=admin_token, json={"token": admin_pt, "platform": "android"})
-check(r.status_code == 200 and r.json().get("ok") is True,
-      "re-POST same admin token -> 200 idempotent",
-      f"{r.status_code}: {r.text[:200]}")
-
-# Empty token
-r = req("POST", "/push-token", token=admin_token, json={"token": "", "platform": "ios"})
-ok_empty = (r.status_code == 200 and r.json().get("ok") is False and r.json().get("reason") == "empty_token") \
-    or r.status_code in (400, 422)
-check(ok_empty,
-      "empty token -> {ok:false,reason:empty_token} or 4xx (not 500)",
-      f"{r.status_code}: {r.text[:200]}")
-
-# Missing token field -> 422
-r = req("POST", "/push-token", token=admin_token, json={"platform": "ios"})
-check(r.status_code in (200, 400, 422),
-      "missing token field -> 4xx or 200 ok:false (not 500)",
-      f"{r.status_code}: {r.text[:200]}")
-
-# Without auth
-r = req("POST", "/push-token", json={"token": "ExponentPushToken[NOAUTH]", "platform": "ios"})
-check(r.status_code in (401, 403),
-      "POST /push-token without auth -> 401",
-      f"{r.status_code}: {r.text[:200]}")
+# 1.11 realtime
+prev_total = perfileria_item.get("total") if perfileria_item else 0
+r = _post(
+    f"/warehouse/locations/{target_loc_id}/stock",
+    headers=_h(admin_token),
+    json={"delta": 10, "note": "Test top-up"},
+)
+r2 = _get("/warehouse/stock", headers=_h(admin_token))
+stock_after = r2.json() if r2.ok else []
+new_item = next((i for i in stock_after if i.get("material_id") == target_material_id), None)
+new_total = new_item.get("total") if new_item else 0
+record(
+    "1.11 After POST stock delta=+10, GET /warehouse/stock total increased by ~10",
+    new_item is not None and abs(new_total - (prev_total + 10)) < 1e-6,
+    f"prev={prev_total} new={new_total} (expected={prev_total + 10})",
+)
 
 
-# ----------------------------------------------------------
-# 4) DELETE /api/push-token
-# ----------------------------------------------------------
-headline("4) DELETE /push-token")
-r = req("DELETE", "/push-token", token=admin_token, json={"token": admin_pt})
-check(r.status_code == 200 and r.json().get("ok") is True,
-      "DELETE existing admin token -> 200",
-      f"{r.status_code}: {r.text[:200]}")
+print("\n=== TEST 2 — GET /api/warehouse/zones/by-qr/{qr_code} ===")
 
-r = req("DELETE", "/push-token", token=admin_token,
-        json={"token": "ExponentPushToken[DOES_NOT_EXIST_XYZ]"})
-check(r.status_code == 200 and r.json().get("ok") is True,
-      "DELETE non-existent token -> 200 idempotent",
-      f"{r.status_code}: {r.text[:200]}")
+r = _get("/warehouse/zones", headers=_h(admin_token))
+zones = r.json() if r.ok else []
+gw_zone = next((z for z in zones if str(z.get("qr_code", "")).startswith("GW-ZONE-")), None)
+record(
+    "2.1 GET /warehouse/zones returns zones with qr_code starting with GW-ZONE-",
+    r.status_code == 200 and gw_zone is not None,
+    f"status={r.status_code} zones={len(zones)} qr_codes={[z.get('qr_code') for z in zones]}",
+)
+if not gw_zone:
+    print("[FATAL] no GW-ZONE-* zone available — abort test 2")
+    sys.exit(1)
+zone_qr = gw_zone["qr_code"]
+print(f"[test2] using zone qr_code={zone_qr} name={gw_zone.get('name')}")
 
-r = requests.delete(f"{BASE}/push-token", json={"token": "x"}, timeout=30)
-check(r.status_code in (401, 403),
-      "DELETE without auth -> 401",
-      f"{r.status_code}: {r.text[:200]}")
+# 2.2 valid GET
+r = _get(f"/warehouse/zones/by-qr/{zone_qr}", headers=_h(admin_token))
+record(
+    "2.2 GET /warehouse/zones/by-qr/{valid} → 200",
+    r.status_code == 200,
+    f"status={r.status_code} body={r.text[:300]}",
+)
+body = r.json() if r.ok else {}
+zone_payload = body.get("zone")
+locations_payload = body.get("locations")
+record(
+    "2.3 Response has top-level `zone` and `locations`",
+    isinstance(zone_payload, dict) and isinstance(locations_payload, list),
+    f"zone_type={type(zone_payload).__name__} locations_type={type(locations_payload).__name__}",
+)
+record(
+    "2.4 zone.qr_code matches scanned QR",
+    bool(zone_payload) and zone_payload.get("qr_code") == zone_qr,
+    f"returned={zone_payload.get('qr_code') if zone_payload else None} expected={zone_qr}",
+)
+zone_keys_ok = bool(zone_payload) and all(k in zone_payload for k in ("id", "qr_code", "zone_number", "name", "category"))
+record(
+    "2.5 zone has {id, qr_code, zone_number, name, category}",
+    zone_keys_ok,
+    f"keys={sorted(zone_payload.keys()) if zone_payload else 'N/A'}",
+)
+locs_present = isinstance(locations_payload, list) and len(locations_payload) >= 1
+record(
+    "2.6 locations list has at least 1 element (zone has locations)",
+    locs_present,
+    f"count={len(locations_payload) if isinstance(locations_payload, list) else 'N/A'}",
+)
+if locs_present:
+    first_loc = locations_payload[0]
+    loc_keys_ok = all(k in first_loc for k in ("id", "zone_id", "row_number", "material_id", "qr_code", "quantity", "status"))
+    record(
+        "2.7 location has {id, zone_id, row_number, material_id, qr_code, quantity, status}",
+        loc_keys_ok,
+        f"keys={sorted(first_loc.keys())}",
+    )
+    status_ok = all(l.get("status") in ("OK", "LOW", "OUT") for l in locations_payload)
+    record(
+        "2.8 each location.status is one of OK|LOW|OUT",
+        status_ok,
+        f"statuses={[l.get('status') for l in locations_payload]}",
+    )
+    mat = first_loc.get("material") or {}
+    mat_ok = isinstance(mat, dict) and "name" in mat and "unit" in mat
+    record(
+        "2.9 location.material has at least `name` and `unit`",
+        mat_ok,
+        f"material_keys={sorted(mat.keys())}",
+    )
 
-# Re-register admin token
-r = req("POST", "/push-token", token=admin_token, json={"token": admin_pt, "platform": "ios"})
-check(r.status_code == 200, "re-register admin push token", str(r.status_code))
+# 2.10 404
+r = _get("/warehouse/zones/by-qr/GW-ZONE-NOEXISTE99", headers=_h(admin_token))
+detail_404 = None
+try:
+    if r.headers.get("content-type", "").startswith("application/json"):
+        detail_404 = r.json().get("detail")
+except Exception:
+    pass
+record(
+    "2.10 GET /warehouse/zones/by-qr/GW-ZONE-NOEXISTE99 → 404 with detail",
+    r.status_code == 404 and isinstance(detail_404, str) and len(detail_404) > 0,
+    f"status={r.status_code} detail={detail_404}",
+)
 
-
-# ----------------------------------------------------------
-# 5) POST /api/alerts
-# ----------------------------------------------------------
-headline("5) POST /alerts")
-
-r = req("POST", "/projects", token=admin_token, json={
-    "name": "Obra Push Test", "address": "Calle Test 1",
-})
-check(r.status_code == 200, "POST /projects -> 200", f"{r.status_code}: {r.text[:200]}")
-project_id = r.json()["id"] if r.status_code == 200 else None
-
-r = req("POST", "/alerts", token=admin_token, json={
-    "type": "INCIDENT_REPORTED",
-    "severity": "CRITICAL",
-    "message": "Fuga importante en obra",
-    "project_id": project_id,
-})
-check(r.status_code == 200, "admin POST /alerts -> 200", f"{r.status_code}: {r.text[:300]}")
-alert = r.json() if r.status_code == 200 else {}
-for f in ("id", "type", "severity", "message", "project_id", "is_read", "created_by", "created_at"):
-    check(f in alert, f"alert response includes '{f}'", f"got keys {list(alert.keys())}")
-check(alert.get("is_read") is False, "alert is_read=false", str(alert.get("is_read")))
-check(alert.get("created_by") == admin_id, "alert created_by == admin.id",
-      f"{alert.get('created_by')} vs {admin_id}")
-alert_id = alert.get("id")
-
-# Worker forbidden
-r = req("POST", "/alerts", token=worker_token, json={
-    "type": "INCIDENT_REPORTED", "severity": "CRITICAL",
-    "message": "Fuga importante en obra", "project_id": project_id,
-})
-check(r.status_code == 403, "worker POST /alerts -> 403", f"{r.status_code}: {r.text[:200]}")
-
-# Missing project_id -> 422
-r = req("POST", "/alerts", token=admin_token, json={
-    "type": "INCIDENT_REPORTED", "severity": "CRITICAL", "message": "Sin obra",
-})
-check(r.status_code == 422, "missing project_id -> 422", f"{r.status_code}: {r.text[:200]}")
-
-# project_id invalid -> 404
-r = req("POST", "/alerts", token=admin_token, json={
-    "type": "INCIDENT_REPORTED", "severity": "CRITICAL",
-    "message": "Mensaje suficientemente largo", "project_id": "nope",
-})
-check(r.status_code == 404, "invalid project_id -> 404", f"{r.status_code}: {r.text[:200]}")
-check("Obra no encontrada" in r.text, "404 detail 'Obra no encontrada'", r.text[:200])
-
-# Short message -> 400
-r = req("POST", "/alerts", token=admin_token, json={
-    "type": "INCIDENT_REPORTED", "severity": "WARNING",
-    "message": "ab", "project_id": project_id,
-})
-check(r.status_code == 400, "message='ab' -> 400", f"{r.status_code}: {r.text[:200]}")
-check("obligator" in r.text.lower() or "mensaje" in r.text.lower(),
-      "400 detail mentions mensaje obligatorio", r.text[:200])
-
-# GET /alerts contains it
-r = req("GET", "/alerts", token=admin_token)
-check(r.status_code == 200, "GET /alerts admin -> 200", str(r.status_code))
-alerts_list = r.json() if r.status_code == 200 else []
-found = next((a for a in alerts_list if a.get("id") == alert_id), None)
-check(found is not None, "created alert appears in /alerts", f"{len(alerts_list)} alerts")
-
-
-# ----------------------------------------------------------
-# 6) Worker access
-# ----------------------------------------------------------
-headline("6) Worker /alerts access")
-r = req("GET", "/alerts", token=worker_token)
-check(r.status_code == 200, "worker GET /alerts -> 200", f"{r.status_code}: {r.text[:200]}")
-worker_alerts = r.json() if r.status_code == 200 else []
-check(len(worker_alerts) >= 1, "worker sees at least 1 alert", f"got {len(worker_alerts)}")
-
-r = req("PATCH", f"/alerts/{alert_id}/read", token=worker_token)
-check(r.status_code == 200 and r.json().get("ok") is True,
-      "worker PATCH /alerts/{id}/read -> 200",
-      f"{r.status_code}: {r.text[:200]}")
-
-r = req("GET", "/alerts", token=worker_token)
-found = next((a for a in r.json() if a.get("id") == alert_id), None) if r.status_code == 200 else None
-check(found is not None and found.get("is_read") is True,
-      "alert now is_read=true", str(found))
+# 2.11 no auth
+r = _get(f"/warehouse/zones/by-qr/{zone_qr}")
+record(
+    "2.11 GET /warehouse/zones/by-qr/{valid} without Bearer → 401",
+    r.status_code in (401, 403),
+    f"status={r.status_code}",
+)
 
 
-# ----------------------------------------------------------
-# 7) Push trigger endpoints don't crash
-# ----------------------------------------------------------
-headline("7) Push trigger endpoints")
-r = req("POST", "/projects", token=admin_token, json={
-    "name": "Obra Trigger 2", "address": "Calle Trigger 2",
-})
-check(r.status_code == 200, "POST /projects again -> 200 (push swallowed)",
-      f"{r.status_code}: {r.text[:200]}")
-proj2 = r.json().get("id") if r.status_code == 200 else None
-
-log_id_1 = None
-log_id_2 = None
-r = req("POST", "/daily-logs", token=admin_token, json={
-    "project_id": project_id,
-    "hours_worked": 8,
-    "work_description": "Trabajo realizado con incidente grave, instalación de marcos y montaje.",
-    "weather_condition": "SUNNY",
-    "progress_percentage": 25,
-    "incidents": "Algo grave pasó",
-})
-check(r.status_code == 200, "POST /daily-logs with incidents -> 200",
-      f"{r.status_code}: {r.text[:300]}")
-if r.status_code == 200:
-    log_id_1 = r.json().get("id")
-
-r = req("POST", "/daily-logs", token=admin_token, json={
-    "project_id": project_id,
-    "hours_worked": 4,
-    "work_description": "Trabajo realizado sin incidentes, simple instalación rutinaria de juntas.",
-    "weather_condition": "CLOUDY",
-    "progress_percentage": 30,
-})
-check(r.status_code == 200, "POST /daily-logs no incidents -> 200",
-      f"{r.status_code}: {r.text[:300]}")
-if r.status_code == 200:
-    log_id_2 = r.json().get("id")
-
-if log_id_1:
-    r = req("PATCH", f"/daily-logs/{log_id_1}/review", token=admin_token,
-            json={"status": "APPROVED"})
-    check(r.status_code == 200, "PATCH review APPROVED -> 200",
-          f"{r.status_code}: {r.text[:200]}")
-
-if log_id_2:
-    r = req("PATCH", f"/daily-logs/{log_id_2}/review", token=admin_token,
-            json={"status": "REJECTED", "review_comment": "corregir"})
-    check(r.status_code == 200, "PATCH review REJECTED -> 200",
-          f"{r.status_code}: {r.text[:200]}")
-
-r = req("POST", "/alerts", token=admin_token, json={
-    "type": "BUDGET_EXCEEDED", "severity": "WARNING",
-    "message": "Presupuesto excedido en revisión", "project_id": project_id,
-})
-check(r.status_code == 200, "POST /alerts again -> 200", f"{r.status_code}: {r.text[:200]}")
-
-
-# ----------------------------------------------------------
-# 8) Audit logs
-# ----------------------------------------------------------
-headline("8) Audit logs")
-r = req("GET", "/security/audit-logs", token=admin_token)
-check(r.status_code == 200, "GET /security/audit-logs admin -> 200",
-      f"{r.status_code}: {r.text[:200]}")
-audit = r.json() if r.status_code == 200 else []
-actions = {a.get("action") for a in audit if isinstance(a, dict)}
-check("ALERT_CREATE" in actions, "audit contains ALERT_CREATE", f"actions={actions}")
-check("PROJECT_CREATE" in actions, "audit contains PROJECT_CREATE", f"actions={actions}")
-
-
-# ----------------------------------------------------------
-# Report
-# ----------------------------------------------------------
-total = passed + failed
-print("\n" + "=" * 60)
-print(f"RESULT: {passed}/{total} passed ({failed} failed)")
-print("=" * 60)
-
-if failures:
-    print("\nFAILURES:")
-    for f in failures:
-        print(f"  - {f}")
-
-if errors_500:
-    print("\n500-LEVEL ERRORS:")
-    for e in errors_500:
-        print(f"  - {e}")
-else:
-    print("\nNo 500 errors observed.")
-
-print(f"\nAdmin: {ADMIN_EMAIL} / {ADMIN_PWD}")
-print(f"Worker: {WORKER_EMAIL} / {WORKER_PWD}")
-
+print("\n=== SUMMARY ===")
+passed = sum(1 for _, ok, _ in results if ok)
+failed = sum(1 for _, ok, _ in results if not ok)
+total = len(results)
+for label, ok, detail in results:
+    if not ok:
+        print(f"  FAIL — {label} — {detail}")
+print(f"\n{passed}/{total} passed, {failed} failed")
 sys.exit(0 if failed == 0 else 1)
