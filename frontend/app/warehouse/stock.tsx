@@ -53,15 +53,20 @@ export default function Stock() {
           contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 32 }}
           ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          // Perf tuning: smoother scroll on long lists
+          removeClippedSubviews
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={7}
           renderItem={({ item }) => (
             <View style={[styles.row, item.low_stock && { borderLeftWidth: 3, borderLeftColor: COLORS.warning }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={TYPO.bodyMedium} numberOfLines={1}>{item.name}</Text>
-                <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12 }]}>{item.category} · {item.lot_count} lote(s){item.low_stock ? ' · STOCK BAJO' : ''}</Text>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={TYPO.bodyMedium} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
+                <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }]} numberOfLines={1}>{item.category} · {item.lot_count} pos.{item.low_stock ? ' · BAJO' : ''}</Text>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[TYPO.h3, item.low_stock ? { color: COLORS.warning } : null]}>{item.total} <Text style={[TYPO.body, { fontSize: 13 }]}>{item.unit}</Text></Text>
-                {!isWorker && item.value != null ? <Text style={[TYPO.body, { color: COLORS.textTertiary, fontSize: 12 }]}>€{item.value.toLocaleString('es-ES', { maximumFractionDigits: 0 })}</Text> : null}
+              <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                <Text style={[TYPO.h3, item.low_stock ? { color: COLORS.warning } : null]} numberOfLines={1}>{item.total} <Text style={[TYPO.body, { fontSize: 13 }]}>{item.unit}</Text></Text>
+                {!isWorker && item.value != null ? <Text style={[TYPO.body, { color: COLORS.textTertiary, fontSize: 12 }]} numberOfLines={1}>€{item.value.toLocaleString('es-ES', { maximumFractionDigits: 0 })}</Text> : null}
               </View>
             </View>
           )}

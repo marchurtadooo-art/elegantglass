@@ -225,7 +225,7 @@ export function HeaderBar({ title, onBack, right, testID }: { title: string; onB
         ) : null}
       </View>
       <Text numberOfLines={1} ellipsizeMode="tail" style={[TYPO.h3, { flex: 1, textAlign: 'center', paddingHorizontal: 4 }]}>{title}</Text>
-      <View style={{ width: 44, alignItems: 'flex-end' }}>{right}</View>
+      <View style={{ minWidth: 44, maxWidth: '40%', alignItems: 'flex-end', flexShrink: 0 }}>{right}</View>
     </View>
   );
 }

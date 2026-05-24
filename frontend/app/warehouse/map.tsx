@@ -198,9 +198,9 @@ export default function WarehouseMap() {
 }
 
 // -----------------------------------------------------------------------
-// Cell
+// Cell — memoized to avoid re-rendering 60+ cells on each parent state change
 // -----------------------------------------------------------------------
-function Cell({ loc, width, onPress }: { loc: Loc; width: any; onPress: () => void }) {
+const Cell = React.memo(function Cell({ loc, width, onPress }: { loc: Loc; width: any; onPress: () => void }) {
   const s = STATUS[loc.status] ?? STATUS.OK;
   return (
     <TouchableOpacity
@@ -220,12 +220,17 @@ function Cell({ loc, width, onPress }: { loc: Loc; width: any; onPress: () => vo
         {loc.material?.name || ''}
       </Text>
       <View style={styles.cellFooter}>
-        <Text style={[styles.cellQty, { color: s.fg }]}>{loc.quantity}</Text>
-        <Text style={[styles.cellUnit, { color: s.fg }]}>{loc.material?.unit || ''}</Text>
+        <Text style={[styles.cellQty, { color: s.fg }]} numberOfLines={1}>{loc.quantity}</Text>
+        <Text style={[styles.cellUnit, { color: s.fg }]} numberOfLines={1}>{loc.material?.unit || ''}</Text>
       </View>
     </TouchableOpacity>
   );
-}
+}, (prev, next) => (
+  prev.loc.id === next.loc.id &&
+  prev.loc.quantity === next.loc.quantity &&
+  prev.loc.status === next.loc.status &&
+  prev.width === next.width
+));
 
 function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
@@ -439,9 +444,10 @@ function ReviewRow({ label, value, color, bold }: { label: string; value: string
 const styles = StyleSheet.create({
   scanFab: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 4,
+    backgroundColor: COLORS.primary, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 4,
+    maxWidth: 130,
   },
-  scanFabText: { color: COLORS.surface, fontWeight: '700', marginLeft: 6, fontSize: 13 },
+  scanFabText: { color: COLORS.surface, fontWeight: '700', marginLeft: 6, fontSize: 12 },
 
   statsRow: {
     flexDirection: 'row', gap: 10, marginBottom: SPACING.md,

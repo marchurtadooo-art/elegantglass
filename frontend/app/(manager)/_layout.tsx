@@ -18,8 +18,15 @@ export default function ManagerTabs() {
         headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textTertiary,
-        tabBarStyle: { backgroundColor: COLORS.surface, borderTopColor: COLORS.border, height: 64, paddingBottom: 8, paddingTop: 6 },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        tabBarStyle: { backgroundColor: COLORS.surface, borderTopColor: COLORS.border, height: 68, paddingBottom: 8, paddingTop: 6 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
+        tabBarItemStyle: { paddingHorizontal: 2 },
+        tabBarHideOnKeyboard: true,
+        // Performance: load each tab on demand and free GPU/RAM when off-screen
+        lazy: true,
+        freezeOnBlur: true,
+        // Lighter animation between tabs
+        animation: 'shift',
       }}
     >
       <Tabs.Screen name="dashboard" options={{ title: 'Resumen', tabBarIcon: ({ color, size }) => <Icon name="bar-chart-outline" color={color} size={size} /> }} />

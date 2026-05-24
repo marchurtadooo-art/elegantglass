@@ -27,6 +27,9 @@ export default function RootLayout() {
             headerShown: false,
             contentStyle: { backgroundColor: COLORS.background },
             animation: 'slide_from_right',
+            animationDuration: 220,
+            // Free up memory + GPU for off-screen routes
+            freezeOnBlur: true,
           }}
         />
       </AuthProvider>
