@@ -2076,6 +2076,51 @@ class StorageZoneIn(BaseModel):
     row_count: int = 10
 
 
+# ---- New: physical storage locations (zone × row × material) ----
+class WarehouseImportItem(BaseModel):
+    """A single physical slot inside a zone."""
+    zone_number: int       # 1..N
+    row_number: int        # 1..row_count
+    material_code: str
+    quantity: float = 0
+    min_quantity: float = 5
+
+
+class WarehouseImportZone(BaseModel):
+    zone_number: int
+    name: str
+    category: MatCategory = "PERFILERIA"
+    row_count: int = 12
+
+
+class WarehouseImportMaterial(BaseModel):
+    code: str
+    name: str
+    category: MatCategory = "PERFILERIA"
+    unit: str = "m"               # 'm' / 'ud' / 'kg' …
+    supplier: str = "Cortizo"
+    family: Optional[str] = None  # e.g. "COR 70 INDUSTRIAL", "COR VISION EVOLUTION"
+
+
+class WarehouseImportPayload(BaseModel):
+    """Single transactional import for the whole warehouse planning.
+
+    The endpoint is idempotent: zones / materials are upserted by name/code,
+    and locations are replaced for this company.
+    """
+    materials: List[WarehouseImportMaterial] = []
+    zones: List[WarehouseImportZone] = []
+    locations: List[WarehouseImportItem] = []
+    wipe_existing_materials: bool = False  # ⚠ deletes all materials of the company first
+
+
+class LocationStockIn(BaseModel):
+    """In/out stock movement for a physical location (tablet flow)."""
+    delta: float                          # positive = inbound, negative = outbound
+    project_id: Optional[str] = None      # optional reference for outbound
+    note: Optional[str] = ""
+
+
 class LotCreateIn(BaseModel):
     material_id: str
     quantity: float
@@ -2143,6 +2188,246 @@ async def warehouse_list_zones(user: dict = Depends(get_current_user)):
         z["lot_count"] = await db.material_lots.count_documents({"company_id": user["company_id"], "zone_id": z["id"]})
         out.append(z)
     return out
+
+
+# ---- New: physical storage locations (warehouse map) ----
+
+def _loc_status(quantity: float, min_q: float) -> str:
+    """Return color code based on stock vs threshold."""
+    if quantity <= 0:
+        return "OUT"        # red
+    if quantity <= max(min_q, 0):
+        return "LOW"        # yellow
+    return "OK"             # green
+
+
+@api.post("/warehouse/import-locations")
+async def warehouse_import_locations(
+    body: WarehouseImportPayload,
+    user: dict = Depends(require_role("ADMIN", "MANAGER")),
+):
+    """Idempotent bulk import of the whole warehouse planning.
+
+    - Optionally wipes existing materials (`wipe_existing_materials`).
+    - Upserts the material catalog (by `code`).
+    - Upserts zones (by `zone_number`).
+    - Replaces all `storage_locations` for this company.
+    - Generates QR codes Z{n}-F{row}-{code} for every location.
+    """
+    company_id = user["company_id"]
+    summary = {"materials": 0, "zones": 0, "locations": 0, "wiped": 0, "qrs": 0}
+
+    # 1) Optional: wipe existing materials of the company
+    if body.wipe_existing_materials:
+        # Delete materials + dependent lots/locations
+        del_mats = await db.materials.delete_many({"company_id": company_id})
+        del_locs = await db.storage_locations.delete_many({"company_id": company_id}) \
+            if "storage_locations" in await db.list_collection_names() else None
+        await db.material_lots.delete_many({"company_id": company_id})
+        summary["wiped"] = int(del_mats.deleted_count or 0)
+
+    # 2) Materials — upsert by (company_id, code)
+    code_to_id: dict[str, str] = {}
+    for m in body.materials:
+        existing = await db.materials.find_one({"company_id": company_id, "code": m.code}, {"_id": 0, "id": 1})
+        if existing:
+            mid = existing["id"]
+            await db.materials.update_one(
+                {"id": mid},
+                {"$set": {
+                    "name": m.name,
+                    "category": m.category,
+                    "unit": m.unit,
+                    "supplier": m.supplier,
+                    "family": m.family or "",
+                    "updated_at": now_utc(),
+                }},
+            )
+        else:
+            mid = str(uuid.uuid4())
+            await db.materials.insert_one({
+                "id": mid,
+                "company_id": company_id,
+                "code": m.code,
+                "name": m.name,
+                "category": m.category,
+                "unit": m.unit,
+                "supplier": m.supplier,
+                "family": m.family or "",
+                "unit_price": 0,
+                "stock": 0,
+                "min_stock": 0,
+                "is_active": True,
+                "created_at": now_utc(),
+                "updated_at": now_utc(),
+            })
+        code_to_id[m.code] = mid
+        summary["materials"] += 1
+
+    # Build a code → id map also from existing materials (so locations can reference them)
+    if not code_to_id:
+        existing = await db.materials.find(
+            {"company_id": company_id}, {"_id": 0, "id": 1, "code": 1}
+        ).to_list(5000)
+        code_to_id = {e["code"]: e["id"] for e in existing}
+
+    # 3) Zones — upsert by (company_id, zone_number)
+    zone_num_to_id: dict[int, dict] = {}
+    for z in body.zones:
+        existing = await db.storage_zones.find_one(
+            {"company_id": company_id, "zone_number": z.zone_number}, {"_id": 0}
+        )
+        if existing:
+            zid = existing["id"]
+            await db.storage_zones.update_one(
+                {"id": zid},
+                {"$set": {
+                    "name": z.name,
+                    "category": z.category,
+                    "row_count": z.row_count,
+                    "updated_at": now_utc(),
+                }},
+            )
+        else:
+            zid = str(uuid.uuid4())
+            await db.storage_zones.insert_one({
+                "id": zid,
+                "company_id": company_id,
+                "zone_number": z.zone_number,
+                "name": z.name,
+                "category": z.category,
+                "row_count": z.row_count,
+                "qr_code": f"GW-ZONE-{zid[:8].upper()}",
+                "created_at": now_utc(),
+                "updated_at": now_utc(),
+            })
+        zone_num_to_id[z.zone_number] = {"id": zid, "name": z.name}
+        summary["zones"] += 1
+
+    # 4) Locations — replace all for the company
+    await db.storage_locations.delete_many({"company_id": company_id})
+
+    locs_to_insert = []
+    for loc in body.locations:
+        zone = zone_num_to_id.get(loc.zone_number)
+        if not zone:
+            # zone not provided in payload — try to look it up
+            z_existing = await db.storage_zones.find_one(
+                {"company_id": company_id, "zone_number": loc.zone_number}, {"_id": 0, "id": 1, "name": 1}
+            )
+            if not z_existing:
+                continue
+            zone = {"id": z_existing["id"], "name": z_existing["name"]}
+        material_id = code_to_id.get(loc.material_code)
+        if not material_id:
+            # Material not found — skip silently
+            continue
+        qr = f"Z{loc.zone_number}-F{loc.row_number}-{loc.material_code}"
+        locs_to_insert.append({
+            "id": str(uuid.uuid4()),
+            "company_id": company_id,
+            "zone_id": zone["id"],
+            "zone_number": loc.zone_number,
+            "zone_name": zone["name"],
+            "row_number": loc.row_number,
+            "material_id": material_id,
+            "material_code": loc.material_code,
+            "quantity": float(loc.quantity or 0),
+            "min_quantity": float(loc.min_quantity or 0),
+            "qr_code": qr,
+            "status": _loc_status(loc.quantity or 0, loc.min_quantity or 0),
+            "created_at": now_utc(),
+            "updated_at": now_utc(),
+        })
+        summary["qrs"] += 1
+    if locs_to_insert:
+        await db.storage_locations.insert_many(locs_to_insert)
+        summary["locations"] = len(locs_to_insert)
+
+    await audit_log(
+        db, action="WAREHOUSE_IMPORT", resource="warehouse",
+        request=None, user=user, success=True, extra=summary,
+    )
+    return summary
+
+
+@api.get("/warehouse/locations")
+async def warehouse_list_locations(
+    zone_number: Optional[int] = None,
+    user: dict = Depends(get_current_user),
+):
+    flt: dict = {"company_id": user["company_id"]}
+    if zone_number is not None:
+        flt["zone_number"] = zone_number
+    locs = await db.storage_locations.find(flt).sort([("zone_number", 1), ("row_number", 1)]).to_list(2000)
+    out = []
+    for loc in locs:
+        loc = serialize(loc)
+        loc["status"] = _loc_status(loc.get("quantity", 0), loc.get("min_quantity", 0))
+        # Attach material display info
+        mat = await db.materials.find_one({"id": loc["material_id"]}, {"_id": 0, "name": 1, "unit": 1, "category": 1, "family": 1, "supplier": 1, "code": 1})
+        loc["material"] = mat or {"name": "", "unit": "", "code": loc.get("material_code", "")}
+        out.append(loc)
+    return out
+
+
+@api.get("/warehouse/locations/by-qr/{qr_code}")
+async def warehouse_location_by_qr(qr_code: str, user: dict = Depends(get_current_user)):
+    loc = await db.storage_locations.find_one(
+        {"company_id": user["company_id"], "qr_code": qr_code}, {"_id": 0}
+    )
+    if not loc:
+        raise HTTPException(status_code=404, detail="Ubicación no encontrada")
+    loc["status"] = _loc_status(loc.get("quantity", 0), loc.get("min_quantity", 0))
+    mat = await db.materials.find_one({"id": loc["material_id"]}, {"_id": 0, "name": 1, "unit": 1, "category": 1, "supplier": 1, "code": 1, "family": 1})
+    loc["material"] = mat or {}
+    return loc
+
+
+@api.post("/warehouse/locations/{loc_id}/stock")
+async def warehouse_location_stock(
+    loc_id: str,
+    body: LocationStockIn,
+    user: dict = Depends(get_current_user),
+):
+    """Single-step stock movement on a physical location (tablet flow)."""
+    if body.delta == 0:
+        raise HTTPException(status_code=400, detail="Cantidad debe ser distinta de 0")
+    loc = await db.storage_locations.find_one(
+        {"id": loc_id, "company_id": user["company_id"]}, {"_id": 0}
+    )
+    if not loc:
+        raise HTTPException(status_code=404, detail="Ubicación no encontrada")
+    new_qty = float(loc.get("quantity", 0)) + float(body.delta)
+    if new_qty < 0:
+        raise HTTPException(status_code=400, detail=f"Stock insuficiente. Quedan {loc.get('quantity', 0)}.")
+    await db.storage_locations.update_one(
+        {"id": loc_id},
+        {"$set": {
+            "quantity": new_qty,
+            "status": _loc_status(new_qty, loc.get("min_quantity", 0)),
+            "updated_at": now_utc(),
+        }},
+    )
+    # Log movement
+    await db.lot_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "company_id": user["company_id"],
+        "location_id": loc_id,
+        "material_id": loc["material_id"],
+        "material_code": loc.get("material_code", ""),
+        "qr_code": loc.get("qr_code", ""),
+        "type": "INBOUND" if body.delta > 0 else "OUTBOUND",
+        "quantity": abs(float(body.delta)),
+        "project_id": body.project_id or None,
+        "note": body.note or "",
+        "user_id": user["id"],
+        "user_name": user.get("name", ""),
+        "created_at": now_utc(),
+    })
+    loc["quantity"] = new_qty
+    loc["status"] = _loc_status(new_qty, loc.get("min_quantity", 0))
+    return loc
 
 
 @api.get("/warehouse/zones/{zid}/qr.png")

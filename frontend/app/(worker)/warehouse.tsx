@@ -67,10 +67,11 @@ export default function WarehouseTab() {
 
       <Text style={[TYPO.caption, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Acciones</Text>
       <View style={styles.grid}>
+        <Action icon="grid-outline" label="Mapa almacén" onPress={() => router.push('/warehouse/map' as any)} />
         <Action icon="qr-code-outline" label="Escanear QR" onPress={() => router.push('/warehouse/scan')} />
         {isManager ? <Action icon="archive-outline" label="Recibir material" onPress={() => router.push('/warehouse/receive')} /> : null}
         <Action icon="layers-outline" label="Stock" onPress={() => router.push('/warehouse/stock')} />
-        <Action icon="grid-outline" label="Zonas" onPress={() => router.push('/warehouse/zones')} />
+        <Action icon="business-outline" label="Zonas" onPress={() => router.push('/warehouse/zones')} />
       </View>
 
       {isManager && dash?.low_stock?.length > 0 ? (

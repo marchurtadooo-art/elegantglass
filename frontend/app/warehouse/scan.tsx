@@ -34,6 +34,11 @@ export default function ScanScreen() {
     if (scanned || processing) return;
     setScanned(true);
     const code = (raw || '').trim();
+    // New location QR format: Z{num}-F{row}-{material_code}
+    if (/^Z\d+-F\d+-/i.test(code)) {
+      router.replace({ pathname: '/warehouse/map', params: { qr: code } } as any);
+      return;
+    }
     if (code.startsWith('ZONE-')) {
       const zid = code.replace('ZONE-', '');
       router.replace({ pathname: '/warehouse/zones', params: { highlight: zid } });
