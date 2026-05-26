@@ -8,11 +8,12 @@
     "scheme": "glasswork",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "jsEngine": "jsc",
+    "jsEngine": "hermes",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.elegantglass.glasswork",
       "buildNumber": "1",
+      "jsEngine": "hermes",
       "infoPlist": {
         "NSCameraUsageDescription": "Para capturar evidencia fotográfica de la obra.",
         "NSPhotoLibraryUsageDescription": "Para adjuntar fotos del trabajo realizado.",
@@ -23,6 +24,7 @@
     "android": {
       "package": "com.elegantglass.glasswork",
       "versionCode": 1,
+      "jsEngine": "hermes",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0A0A0A"
