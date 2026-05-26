@@ -287,6 +287,32 @@ class ProjectIn(BaseModel):
     cover_photo: Optional[str] = None
 
 
+class ProjectPatch(BaseModel):
+    """Partial update — every field is optional so PATCH can target a subset.
+
+    Pydantic's `exclude_unset=True` plus all-Optional fields lets us send e.g.
+    `{"budget": 12000}` without nuking the rest of the project (assigned workers,
+    name, dates...). Critical so that a manager adding budget to a worker-created
+    obra never strips the worker's access.
+    """
+    name: Optional[str] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    status: Optional[ProjectStatus] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    actual_end_date: Optional[str] = None
+    budget: Optional[float] = None
+    client_name: Optional[str] = None
+    client_phone: Optional[str] = None
+    client_email: Optional[str] = None
+    notes: Optional[str] = None
+    assigned_worker_ids: Optional[List[str]] = None
+    cover_photo: Optional[str] = None
+
+
 class MaterialIn(BaseModel):
     name: str
     unit: Literal["m2", "m", "ud", "kg", "l", "caja"]
@@ -646,16 +672,24 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
 
 
 @api.post("/projects")
-async def create_project(request: Request, body: ProjectIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+async def create_project(request: Request, body: ProjectIn, user: dict = Depends(require_role("ADMIN", "MANAGER", "WORKER"))):
     pid = str(uuid.uuid4())
+    payload = body.dict()
+    # WORKERs must never set budget/financial fields. Force zero regardless of payload.
+    if user["role"] == "WORKER":
+        payload["budget"] = 0.0
     proj = {
         "id": pid,
         "company_id": user["company_id"],
         "manager_id": user["id"],
         "created_at": now_utc(),
         "updated_at": now_utc(),
-        **body.dict(),
+        **payload,
     }
+    # If a WORKER creates the project, auto-assign them so they can see it later.
+    if user["role"] == "WORKER":
+        assigned = list(set((proj.get("assigned_worker_ids") or []) + [user["id"]]))
+        proj["assigned_worker_ids"] = assigned
     await db.projects.insert_one(proj.copy())
     await audit_log(
         db, action="PROJECT_CREATE", resource="project", resource_id=pid,
@@ -674,20 +708,22 @@ async def create_project(request: Request, body: ProjectIn, user: dict = Depends
         )
     except Exception as e:
         logger.warning(f"push new_project failed: {e}")
-    return serialize(proj)
+    return filter_project_for_role(serialize(proj), user["role"])
 
 
 @api.patch("/projects/{project_id}")
 async def update_project(
-    project_id: str, body: ProjectIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))
+    project_id: str, body: ProjectPatch, user: dict = Depends(require_role("ADMIN", "MANAGER"))
 ):
-    upd = body.dict()
+    # Only update fields the caller actually sent — never wipe assigned_worker_ids
+    # (or any other field) just because the model has a default value for it.
+    upd = body.dict(exclude_unset=True)
     upd["updated_at"] = now_utc()
     await db.projects.update_one(
         {"id": project_id, "company_id": user["company_id"]}, {"$set": upd}
     )
     p = await db.projects.find_one({"id": project_id})
-    return serialize(p)
+    return filter_project_for_role(serialize(p), user["role"])
 
 
 @api.delete("/projects/{project_id}")

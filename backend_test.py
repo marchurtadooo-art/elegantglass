@@ -1,356 +1,269 @@
-"""Backend tests — Warehouse stock rewrite + new zones/by-qr endpoint.
-
-Targets:
-  1. GET /api/warehouse/stock — now aggregates from storage_locations primarily
-  2. GET /api/warehouse/zones/by-qr/{qr_code} — new endpoint for GW-ZONE-XXXXXXXX
 """
-
-from __future__ import annotations
-import sys
+Backend test: WORKER permissions for projects + ProjectPatch (PATCH parcial)
+Review request — Tests A, B, C, D.
+"""
+import json
 import time
 import uuid
 import requests
 
+BASE = "http://localhost:8001/api"
 
-def _resolve_base() -> str:
-    env_path = "/app/frontend/.env"
-    backend_url = None
+def jp(d):  # pretty
     try:
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("EXPO_PUBLIC_BACKEND_URL="):
-                    backend_url = line.strip().split("=", 1)[1].strip().strip('"')
-                    break
+        return json.dumps(d, indent=2, ensure_ascii=False)[:600]
     except Exception:
-        pass
-    if not backend_url:
-        backend_url = "http://localhost:8001"
-    return backend_url.rstrip("/") + "/api"
+        return str(d)[:600]
+
+results = []  # list of (name, passed, detail)
+
+def check(name, cond, detail=""):
+    results.append((name, bool(cond), detail))
+    mark = "PASS" if cond else "FAIL"
+    print(f"[{mark}] {name}{(' — ' + detail) if (detail and not cond) else ''}")
 
 
-BASE = _resolve_base()
-print(f"[setup] BASE = {BASE}")
-
-results = []  # list[ (label, ok, detail) ]
-
-
-def record(label, ok, detail=""):
-    status = "PASS" if ok else "FAIL"
-    print(f"  [{status}] {label} — {detail}" if detail else f"  [{status}] {label}")
-    results.append((label, ok, detail))
-
-
-def _post(path, **kw):
-    return requests.post(BASE + path, timeout=30, **kw)
-
-
-def _get(path, **kw):
-    return requests.get(BASE + path, timeout=30, **kw)
-
-
-def _h(token):
+def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-print("\n=== SETUP: register fresh tenant ===")
-unique = f"{int(time.time())}-{uuid.uuid4().hex[:6]}"
-admin_email = f"admin-wh-test+{unique}@example.com"
-admin_pwd = "AdminTest1234!"
-worker_email = f"worker-wh-test+{unique}@example.com"
-worker_pwd = "WorkerTest1234!"
+def main():
+    stamp = int(time.time())
+    admin_email = f"admin-worker-perm+{stamp}@example.com"
+    worker_email = f"worker1-perm+{stamp}@example.com"
+    worker2_email = f"worker2-perm+{stamp}@example.com"
+    pwd = "Admin1234!"
 
-r = _post(
-    "/auth/register",
-    json={
+    # Register admin tenant
+    r = requests.post(f"{BASE}/auth/register", json={
+        "name": "Admin Perm",
         "email": admin_email,
-        "password": admin_pwd,
-        "name": "Pablo Admin Warehouse",
-        "company_name": f"Vidrios Pablo {unique[:6]}",
-    },
-)
-if r.status_code != 200:
-    print(f"[FATAL] register failed: {r.status_code} {r.text[:500]}")
-    sys.exit(1)
-admin_token = r.json()["access_token"]
-print(f"[setup] admin registered → {admin_email}")
+        "password": pwd,
+        "company_name": f"Perm Co {stamp}",
+    })
+    check("Register admin (200)", r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    admin_tok = r.json()["access_token"]
+    admin_id = r.json()["user"]["id"]
 
-r = _post(
-    "/users",
-    headers=_h(admin_token),
-    json={
+    # Admin creates WORKER #1
+    r = requests.post(f"{BASE}/users", headers=auth(admin_tok), json={
+        "name": "Worker One",
         "email": worker_email,
-        "password": worker_pwd,
-        "name": "Carlos Worker Warehouse",
+        "password": pwd,
         "role": "WORKER",
-        "phone": "+34 600 111 222",
-    },
-)
-if r.status_code != 200:
-    print(f"[FATAL] create worker failed: {r.status_code} {r.text[:500]}")
-    sys.exit(1)
+    })
+    check("Admin creates WORKER #1 (200)", r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    worker1_id = r.json()["id"]
 
-r = _post("/auth/login", json={"email": worker_email, "password": worker_pwd})
-if r.status_code != 200:
-    print(f"[FATAL] worker login failed: {r.status_code} {r.text[:500]}")
-    sys.exit(1)
-worker_token = r.json()["access_token"]
-print(f"[setup] worker created and logged in → {worker_email}")
+    # Admin creates WORKER #2 (same tenant)
+    r = requests.post(f"{BASE}/users", headers=auth(admin_tok), json={
+        "name": "Worker Two",
+        "email": worker2_email,
+        "password": pwd,
+        "role": "WORKER",
+    })
+    check("Admin creates WORKER #2 (200)", r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    worker2_id = r.json()["id"]
 
+    # Login both workers
+    r = requests.post(f"{BASE}/auth/login", json={"email": worker_email, "password": pwd})
+    check("Worker #1 login (200)", r.status_code == 200)
+    worker_tok = r.json()["access_token"]
 
-print("\n=== TEST 1 — GET /api/warehouse/stock (rewritten) ===")
+    r = requests.post(f"{BASE}/auth/login", json={"email": worker2_email, "password": pwd})
+    check("Worker #2 login (200)", r.status_code == 200)
+    worker2_tok = r.json()["access_token"]
 
-# 1.0 With empty data, must not 500
-r = _get("/warehouse/stock", headers=_h(admin_token))
-record(
-    "1.0 GET /warehouse/stock with empty data returns 200 (not 500) and a list",
-    r.status_code == 200 and isinstance(r.json(), list),
-    f"status={r.status_code} body_type={type(r.json()).__name__ if r.ok else r.text[:200]}",
-)
+    # ========== TEST A — POST /api/projects as WORKER ==========
+    print("\n========= TEST A — POST /api/projects con role=WORKER =========")
+    payload = {
+        "name": "Obra X",
+        "address": "C/Y",
+        "client_name": "C",
+        "budget": 5000,
+        "start_date": "2026-06-01",
+        "end_date": "2026-09-01",
+        "notes": "N",
+    }
+    r = requests.post(f"{BASE}/projects", headers=auth(worker_tok), json=payload)
+    check("A1: Worker POST /projects → 200", r.status_code == 200, f"{r.status_code} {r.text[:300]}")
+    if r.status_code == 200:
+        body = r.json()
+        project_id = body.get("id")
+        check("A2: response budget is None (worker doesn't see budget)",
+              body.get("budget") is None,
+              f"budget={body.get('budget')}")
+        check("A3: worker is in assigned_worker_ids automatically",
+              worker1_id in (body.get("assigned_worker_ids") or []),
+              f"assigned_worker_ids={body.get('assigned_worker_ids')}")
+        check("A4: name preserved", body.get("name") == "Obra X")
+    else:
+        return False, "A1 failed; cannot continue"
 
-# 1.1 Import minimal warehouse
-import_payload = {
-    "materials": [
-        {
-            "code": "COR70-IND-3MT-RAL9005",
-            "name": "Perfil COR 70 Industrial RAL 9005 — 3m",
-            "category": "PERFILERIA",
-            "unit": "m",
-            "supplier": "Cortizo",
-            "family": "COR 70 INDUSTRIAL",
-        },
-        {
-            "code": "VID-CLIMA-4-16-4",
-            "name": "Vidrio Climalit 4/16/4",
-            "category": "VIDRIO",
-            "unit": "m2",
-            "supplier": "Saint-Gobain",
-            "family": "CLIMALIT",
-        },
-    ],
-    "zones": [
-        {"zone_number": 1, "name": "Zona A — Perfilería", "category": "PERFILERIA", "row_count": 4},
-        {"zone_number": 2, "name": "Zona B — Vidrio", "category": "VIDRIO", "row_count": 3},
-    ],
-    "locations": [
-        {"zone_number": 1, "row_number": 1, "material_code": "COR70-IND-3MT-RAL9005", "quantity": 0, "min_quantity": 5},
-        {"zone_number": 1, "row_number": 2, "material_code": "COR70-IND-3MT-RAL9005", "quantity": 8, "min_quantity": 5},
-        {"zone_number": 2, "row_number": 1, "material_code": "VID-CLIMA-4-16-4", "quantity": 12, "min_quantity": 2},
-    ],
-    "wipe_existing_materials": False,
-}
-r = _post("/warehouse/import-locations", headers=_h(admin_token), json=import_payload)
-import_ok = r.status_code == 200 and r.json().get("locations", 0) == 3
-record(
-    "1.1 POST /warehouse/import-locations imports 2 materials, 2 zones, 3 locations",
-    import_ok,
-    f"status={r.status_code} body={r.text[:200]}",
-)
-if not import_ok:
-    print("[FATAL] cannot continue without import")
-    sys.exit(1)
+    # Worker GET single
+    r = requests.get(f"{BASE}/projects/{project_id}", headers=auth(worker_tok))
+    check("A5: Worker GET /projects/{id} → 200", r.status_code == 200, f"{r.status_code}")
+    if r.status_code == 200:
+        check("A6: Worker GET shows budget=None", r.json().get("budget") is None,
+              f"budget={r.json().get('budget')}")
 
-# 1.2 Locate target
-r = _get("/warehouse/locations", headers=_h(admin_token))
-locs = r.json() if r.ok else []
-loc_perf_empty = next(
-    (l for l in locs if l.get("zone_number") == 1 and l.get("row_number") == 1),
-    None,
-)
-loc_perf_filled = next(
-    (l for l in locs if l.get("zone_number") == 1 and l.get("row_number") == 2),
-    None,
-)
-record(
-    "1.2 GET /warehouse/locations returns 3 locations including the target row",
-    r.status_code == 200 and len(locs) == 3 and loc_perf_empty is not None,
-    f"status={r.status_code} count={len(locs)}",
-)
-target_loc_id = loc_perf_empty["id"]
-target_material_id = loc_perf_empty["material_id"]
+    # Worker GET list
+    r = requests.get(f"{BASE}/projects", headers=auth(worker_tok))
+    check("A7: Worker GET /projects → 200", r.status_code == 200)
+    if r.status_code == 200:
+        ids = [p.get("id") for p in r.json()]
+        check("A8: Project appears in Worker's list", project_id in ids,
+              f"ids={ids}")
 
-# 1.3 +25 delta
-r = _post(
-    f"/warehouse/locations/{target_loc_id}/stock",
-    headers=_h(admin_token),
-    json={"delta": 25, "note": "Test initial load"},
-)
-record(
-    "1.3 POST /warehouse/locations/{id}/stock delta=+25 returns 200 with quantity=25",
-    r.status_code == 200 and abs(r.json().get("quantity", 0) - 25) < 1e-6,
-    f"status={r.status_code} body={r.text[:200]}",
-)
+    # ========== TEST B — PATCH parcial ==========
+    print("\n========= TEST B — PATCH parcial con ProjectPatch =========")
+    # B1: admin PATCH budget
+    r = requests.patch(f"{BASE}/projects/{project_id}", headers=auth(admin_tok),
+                       json={"budget": 12000.0})
+    check("B1: Admin PATCH {budget:12000} → 200", r.status_code == 200,
+          f"{r.status_code} {r.text[:200]}")
+    if r.status_code == 200:
+        check("B1b: Admin sees budget=12000", r.json().get("budget") == 12000.0,
+              f"budget={r.json().get('budget')}")
 
-# 1.4-1.8 admin stock
-r = _get("/warehouse/stock", headers=_h(admin_token))
-stock_admin = r.json() if r.ok else []
-perfileria_item = next((i for i in stock_admin if i.get("material_id") == target_material_id), None)
-expected_total = 25 + (loc_perf_filled.get("quantity", 0) if loc_perf_filled else 0)
-shape_keys = {"material_id", "name", "category", "unit", "total", "lot_count", "low_stock"}
-shape_ok = perfileria_item is not None and shape_keys.issubset(set(perfileria_item.keys()))
-total_ok = perfileria_item is not None and perfileria_item.get("total", 0) >= 25
-lot_count_ok = perfileria_item is not None and perfileria_item.get("lot_count", 0) >= 1
-record(
-    "1.4 GET /warehouse/stock (admin) returns non-empty array",
-    r.status_code == 200 and isinstance(stock_admin, list) and len(stock_admin) > 0,
-    f"status={r.status_code} items={len(stock_admin)}",
-)
-record(
-    "1.5 Stock item has required shape {material_id,name,category,unit,total,lot_count,low_stock}",
-    shape_ok,
-    f"keys_present={sorted(perfileria_item.keys()) if perfileria_item else 'MISSING'}",
-)
-record(
-    "1.6 Stock item total >= 25 for the material that received +25 delta",
-    total_ok,
-    f"total={perfileria_item.get('total') if perfileria_item else 'N/A'} (expected_aggregate={expected_total})",
-)
-record(
-    "1.7 Stock item lot_count >= 1 for that material",
-    lot_count_ok,
-    f"lot_count={perfileria_item.get('lot_count') if perfileria_item else 'N/A'}",
-)
-admin_value_ok = all("value" in i for i in stock_admin)
-record(
-    "1.8 ADMIN stock items include `value` field",
-    admin_value_ok,
-    f"sample_keys={sorted(stock_admin[0].keys()) if stock_admin else 'empty'}",
-)
+    # B2: worker GET still 200 with budget=None
+    r = requests.get(f"{BASE}/projects/{project_id}", headers=auth(worker_tok))
+    check("B2: Worker GET /projects/{id} → 200 (still has access)",
+          r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    if r.status_code == 200:
+        check("B2b: Worker still sees budget=None after admin set budget",
+              r.json().get("budget") is None, f"budget={r.json().get('budget')}")
+        check("B2c: Worker still in assigned_worker_ids",
+              worker1_id in (r.json().get("assigned_worker_ids") or []),
+              f"assigned={r.json().get('assigned_worker_ids')}")
 
-# 1.9 no token
-r = _get("/warehouse/stock")
-record(
-    "1.9 GET /warehouse/stock without token → 401",
-    r.status_code in (401, 403),
-    f"status={r.status_code}",
-)
+    # B3: admin GET → 12000
+    r = requests.get(f"{BASE}/projects/{project_id}", headers=auth(admin_tok))
+    check("B3: Admin GET budget=12000.0", r.status_code == 200 and r.json().get("budget") == 12000.0,
+          f"{r.status_code} budget={r.json().get('budget') if r.status_code==200 else None}")
 
-# 1.10 worker
-r = _get("/warehouse/stock", headers=_h(worker_token))
-stock_worker = r.json() if r.ok else []
-worker_no_value = all("value" not in i for i in stock_worker) if stock_worker else False
-record(
-    "1.10 GET /warehouse/stock (worker) returns 200 and items DO NOT include `value`",
-    r.status_code == 200 and isinstance(stock_worker, list) and len(stock_worker) > 0 and worker_no_value,
-    f"status={r.status_code} items={len(stock_worker)} no_value={worker_no_value} sample_keys={sorted(stock_worker[0].keys()) if stock_worker else 'empty'}",
-)
+    # B4: admin PATCH only name
+    r = requests.patch(f"{BASE}/projects/{project_id}", headers=auth(admin_tok),
+                       json={"name": "Renombrada"})
+    check("B4: Admin PATCH {name:'Renombrada'} → 200", r.status_code == 200,
+          f"{r.status_code} {r.text[:200]}")
+    if r.status_code == 200:
+        check("B4b: name updated", r.json().get("name") == "Renombrada")
 
-# 1.11 realtime
-prev_total = perfileria_item.get("total") if perfileria_item else 0
-r = _post(
-    f"/warehouse/locations/{target_loc_id}/stock",
-    headers=_h(admin_token),
-    json={"delta": 10, "note": "Test top-up"},
-)
-r2 = _get("/warehouse/stock", headers=_h(admin_token))
-stock_after = r2.json() if r2.ok else []
-new_item = next((i for i in stock_after if i.get("material_id") == target_material_id), None)
-new_total = new_item.get("total") if new_item else 0
-record(
-    "1.11 After POST stock delta=+10, GET /warehouse/stock total increased by ~10",
-    new_item is not None and abs(new_total - (prev_total + 10)) < 1e-6,
-    f"prev={prev_total} new={new_total} (expected={prev_total + 10})",
-)
+    # Worker GET — should still be 200, see new name, budget=None
+    r = requests.get(f"{BASE}/projects/{project_id}", headers=auth(worker_tok))
+    check("B5: Worker GET → 200 (assigned_worker_ids preserved)",
+          r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    if r.status_code == 200:
+        check("B5b: name='Renombrada'", r.json().get("name") == "Renombrada",
+              f"name={r.json().get('name')}")
+        check("B5c: budget still None for worker", r.json().get("budget") is None,
+              f"budget={r.json().get('budget')}")
 
+    # Admin verifies budget still preserved after name-only PATCH
+    r = requests.get(f"{BASE}/projects/{project_id}", headers=auth(admin_tok))
+    check("B5d: Admin still sees budget=12000 (PATCH didn't wipe)",
+          r.status_code == 200 and r.json().get("budget") == 12000.0,
+          f"budget={r.json().get('budget') if r.status_code==200 else None}")
 
-print("\n=== TEST 2 — GET /api/warehouse/zones/by-qr/{qr_code} ===")
+    # ========== TEST C — Permisos/restricciones ==========
+    print("\n========= TEST C — Permisos / restricciones =========")
+    # C1: Worker PATCH → 403
+    r = requests.patch(f"{BASE}/projects/{project_id}", headers=auth(worker_tok),
+                       json={"name": "WorkerShouldFail"})
+    check("C1: Worker PATCH → 403", r.status_code == 403,
+          f"{r.status_code} {r.text[:200]}")
 
-r = _get("/warehouse/zones", headers=_h(admin_token))
-zones = r.json() if r.ok else []
-gw_zone = next((z for z in zones if str(z.get("qr_code", "")).startswith("GW-ZONE-")), None)
-record(
-    "2.1 GET /warehouse/zones returns zones with qr_code starting with GW-ZONE-",
-    r.status_code == 200 and gw_zone is not None,
-    f"status={r.status_code} zones={len(zones)} qr_codes={[z.get('qr_code') for z in zones]}",
-)
-if not gw_zone:
-    print("[FATAL] no GW-ZONE-* zone available — abort test 2")
-    sys.exit(1)
-zone_qr = gw_zone["qr_code"]
-print(f"[test2] using zone qr_code={zone_qr} name={gw_zone.get('name')}")
+    # C2: Worker DELETE → 403
+    r = requests.delete(f"{BASE}/projects/{project_id}", headers=auth(worker_tok))
+    check("C2: Worker DELETE → 403", r.status_code == 403,
+          f"{r.status_code} {r.text[:200]}")
 
-# 2.2 valid GET
-r = _get(f"/warehouse/zones/by-qr/{zone_qr}", headers=_h(admin_token))
-record(
-    "2.2 GET /warehouse/zones/by-qr/{valid} → 200",
-    r.status_code == 200,
-    f"status={r.status_code} body={r.text[:300]}",
-)
-body = r.json() if r.ok else {}
-zone_payload = body.get("zone")
-locations_payload = body.get("locations")
-record(
-    "2.3 Response has top-level `zone` and `locations`",
-    isinstance(zone_payload, dict) and isinstance(locations_payload, list),
-    f"zone_type={type(zone_payload).__name__} locations_type={type(locations_payload).__name__}",
-)
-record(
-    "2.4 zone.qr_code matches scanned QR",
-    bool(zone_payload) and zone_payload.get("qr_code") == zone_qr,
-    f"returned={zone_payload.get('qr_code') if zone_payload else None} expected={zone_qr}",
-)
-zone_keys_ok = bool(zone_payload) and all(k in zone_payload for k in ("id", "qr_code", "zone_number", "name", "category"))
-record(
-    "2.5 zone has {id, qr_code, zone_number, name, category}",
-    zone_keys_ok,
-    f"keys={sorted(zone_payload.keys()) if zone_payload else 'N/A'}",
-)
-locs_present = isinstance(locations_payload, list) and len(locations_payload) >= 1
-record(
-    "2.6 locations list has at least 1 element (zone has locations)",
-    locs_present,
-    f"count={len(locations_payload) if isinstance(locations_payload, list) else 'N/A'}",
-)
-if locs_present:
-    first_loc = locations_payload[0]
-    loc_keys_ok = all(k in first_loc for k in ("id", "zone_id", "row_number", "material_id", "qr_code", "quantity", "status"))
-    record(
-        "2.7 location has {id, zone_id, row_number, material_id, qr_code, quantity, status}",
-        loc_keys_ok,
-        f"keys={sorted(first_loc.keys())}",
-    )
-    status_ok = all(l.get("status") in ("OK", "LOW", "OUT") for l in locations_payload)
-    record(
-        "2.8 each location.status is one of OK|LOW|OUT",
-        status_ok,
-        f"statuses={[l.get('status') for l in locations_payload]}",
-    )
-    mat = first_loc.get("material") or {}
-    mat_ok = isinstance(mat, dict) and "name" in mat and "unit" in mat
-    record(
-        "2.9 location.material has at least `name` and `unit`",
-        mat_ok,
-        f"material_keys={sorted(mat.keys())}",
-    )
+    # C3: Worker #2 cannot see worker #1's project
+    r = requests.get(f"{BASE}/projects/{project_id}", headers=auth(worker2_tok))
+    check("C3: Worker #2 GET other worker's project → 403",
+          r.status_code == 403, f"{r.status_code} {r.text[:200]}")
 
-# 2.10 404
-r = _get("/warehouse/zones/by-qr/GW-ZONE-NOEXISTE99", headers=_h(admin_token))
-detail_404 = None
-try:
-    if r.headers.get("content-type", "").startswith("application/json"):
-        detail_404 = r.json().get("detail")
-except Exception:
-    pass
-record(
-    "2.10 GET /warehouse/zones/by-qr/GW-ZONE-NOEXISTE99 → 404 with detail",
-    r.status_code == 404 and isinstance(detail_404, str) and len(detail_404) > 0,
-    f"status={r.status_code} detail={detail_404}",
-)
+    # C3b: Worker #2 list does NOT include this project
+    r = requests.get(f"{BASE}/projects", headers=auth(worker2_tok))
+    if r.status_code == 200:
+        ids = [p.get("id") for p in r.json()]
+        check("C3b: Worker #2 list does NOT include the project",
+              project_id not in ids, f"ids={ids}")
+    else:
+        check("C3b: Worker #2 list 200", False, f"{r.status_code}")
 
-# 2.11 no auth
-r = _get(f"/warehouse/zones/by-qr/{zone_qr}")
-record(
-    "2.11 GET /warehouse/zones/by-qr/{valid} without Bearer → 401",
-    r.status_code in (401, 403),
-    f"status={r.status_code}",
-)
+    # C4: No Bearer → 401
+    r = requests.get(f"{BASE}/projects")
+    check("C4a: GET /projects no auth → 401", r.status_code == 401, f"{r.status_code}")
+    r = requests.get(f"{BASE}/projects/{project_id}")
+    check("C4b: GET /projects/{id} no auth → 401", r.status_code == 401, f"{r.status_code}")
+    r = requests.post(f"{BASE}/projects", json={"name": "x", "address": "y"})
+    check("C4c: POST /projects no auth → 401", r.status_code == 401, f"{r.status_code}")
+    r = requests.patch(f"{BASE}/projects/{project_id}", json={"name": "x"})
+    check("C4d: PATCH /projects/{id} no auth → 401", r.status_code == 401, f"{r.status_code}")
+    r = requests.delete(f"{BASE}/projects/{project_id}")
+    check("C4e: DELETE /projects/{id} no auth → 401", r.status_code == 401, f"{r.status_code}")
+
+    # ========== TEST D — Existing endpoints NOT broken ==========
+    print("\n========= TEST D — Existing endpoints NO rotos =========")
+    # D1: /warehouse/stock
+    r = requests.get(f"{BASE}/warehouse/stock", headers=auth(admin_tok))
+    check("D1: GET /warehouse/stock (admin) → 200",
+          r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+
+    # D2: /warehouse/zones/by-qr/{qr}
+    # Create a zone directly via POST /warehouse/zones, then test by-qr
+    r = requests.post(f"{BASE}/warehouse/zones", headers=auth(admin_tok), json={
+        "name": "Zona Test Perm", "category": "PERFILERIA", "row_count": 2,
+    })
+    check("D2-prep: POST /warehouse/zones → 200",
+          r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    if r.status_code == 200:
+        qrc = r.json().get("qr_code")
+        check("D2-prep: zone has qr_code", bool(qrc), f"qr_code={qrc}")
+        if qrc:
+            br = requests.get(f"{BASE}/warehouse/zones/by-qr/{qrc}", headers=auth(admin_tok))
+            check("D2: GET /warehouse/zones/by-qr/{qr} → 200",
+                  br.status_code == 200, f"{br.status_code} {br.text[:200]}")
+            if br.status_code == 200:
+                j = br.json()
+                check("D2b: response has zone & locations",
+                      isinstance(j.get("zone"), dict) and isinstance(j.get("locations"), list),
+                      f"keys={list(j.keys())}")
+            # No auth
+            nr = requests.get(f"{BASE}/warehouse/zones/by-qr/{qrc}")
+            check("D2c: by-qr no auth → 401", nr.status_code == 401, f"{nr.status_code}")
+
+    # D3: Admin POST /projects respects budget sent
+    r = requests.post(f"{BASE}/projects", headers=auth(admin_tok), json={
+        "name": "Obra Admin",
+        "address": "Calle Admin",
+        "client_name": "C2",
+        "budget": 25000.0,
+        "start_date": "2026-01-01",
+        "end_date": "2026-12-31",
+        "notes": "Admin project",
+    })
+    check("D3: Admin POST /projects → 200",
+          r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    if r.status_code == 200:
+        check("D3b: Admin sees budget=25000.0 (not wiped)",
+              r.json().get("budget") == 25000.0, f"budget={r.json().get('budget')}")
+
+    # Summary
+    print("\n" + "=" * 60)
+    passed = sum(1 for _, ok, _ in results if ok)
+    failed = sum(1 for _, ok, _ in results if not ok)
+    print(f"SUMMARY: {passed} passed / {failed} failed / {len(results)} total")
+    if failed:
+        print("\nFAILED:")
+        for n, ok, d in results:
+            if not ok:
+                print(f"  - {n}: {d}")
+    return passed, failed
 
 
-print("\n=== SUMMARY ===")
-passed = sum(1 for _, ok, _ in results if ok)
-failed = sum(1 for _, ok, _ in results if not ok)
-total = len(results)
-for label, ok, detail in results:
-    if not ok:
-        print(f"  FAIL — {label} — {detail}")
-print(f"\n{passed}/{total} passed, {failed} failed")
-sys.exit(0 if failed == 0 else 1)
+if __name__ == "__main__":
+    p, f = main()
+    raise SystemExit(0 if f == 0 else 1)

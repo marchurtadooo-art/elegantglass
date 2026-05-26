@@ -269,11 +269,48 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Warehouse stock aggregation now reads from storage_locations + material_lots (GET /api/warehouse/stock)"
-    - "New endpoint GET /api/warehouse/zones/by-qr/{qr_code} resolves zone QR labels (GW-ZONE-XXXXXXXX)"
+    - "WORKER puede crear obras pero el backend ignora budget (POST /api/projects)"
+    - "Filtro role-aware: WORKER nunca ve budget aunque ADMIN lo añada por PATCH"
+    - "PATCH parcial: ProjectPatch con campos opcionales + exclude_unset preserva assigned_worker_ids"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend:
+  - task: "WORKER puede crear obras (POST /api/projects) sin presupuesto y se auto-asigna"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Cambiado require_role de POST /projects a aceptar WORKER. Si role==WORKER: budget se fuerza a 0.0 ignorando lo que envíe el cliente, y el worker se auto-añade a assigned_worker_ids para que vea su obra luego. Respuesta filtrada por role (worker recibe budget=None)."
+        -working: true
+        -agent: "testing"
+        -comment: "Verificado con /app/backend_test.py contra http://localhost:8001/api — 42/42 aserciones pasan. Setup: tenant fresco admin-worker-perm+{stamp}@example.com + 2 workers (worker1-perm+, worker2-perm+) creados vía POST /api/users con role=WORKER. TEST A (Worker crea obra): (A1) Worker POST /api/projects con {name:'Obra X', address:'C/Y', client_name:'C', budget:5000, start_date:'2026-06-01', end_date:'2026-09-01', notes:'N'} → 200; (A2) respuesta tiene budget=None (filtrado por role); (A3) worker1.id está en assigned_worker_ids automáticamente; (A4) name='Obra X' preservado; (A5) Worker GET /projects/{id} → 200; (A6) budget=None para worker en GET; (A7-A8) la obra aparece en Worker GET /projects. TEST C/D extras (Test C verificaciones): worker no puede crear con role guard antiguo, no rompe ADMIN/MANAGER (D3 confirmó admin POST con budget=25000 retorna budget=25000.0)."
+  - task: "PATCH parcial con ProjectPatch (todos Optional) — no wipea assigned_worker_ids"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Nuevo modelo ProjectPatch con todos los campos Optional. PATCH /projects/{id} usa body.dict(exclude_unset=True) para solo $set los campos enviados. Antes admin PATCH {budget: 12000} sobreescribía assigned_worker_ids=[] (default de ProjectIn) y el worker perdía acceso. Ahora se preserva. También retorna respuesta filtrada por role."
+        -working: true
+        -agent: "testing"
+        -comment: "Verificado con /app/backend_test.py. TEST B (PATCH parcial): (B1) Admin PATCH /projects/{id} con {budget:12000.0} → 200 con body.budget=12000.0; (B2) Worker GET /projects/{id} sigue 200 (NO 403 — assigned_worker_ids preservado por exclude_unset), budget=None para worker, worker1.id sigue en assigned_worker_ids; (B3) Admin GET → budget=12000.0; (B4) Admin PATCH solo {name:'Renombrada'} → 200, name actualizado; (B5) Worker GET sigue 200 con name='Renombrada' y budget=None; (B5d) Admin GET sigue mostrando budget=12000.0 (PATCH name no wipeó budget). TEST C (Restricciones): (C1) Worker PATCH /projects/{id} con cualquier body → 403 (solo ADMIN/MANAGER); (C2) Worker DELETE /projects/{id} → 403 (no permitido aunque sea creador); (C3) Worker #2 GET /projects/{id} ajeno → 403; (C3b) Worker #2 GET /projects no incluye la obra; (C4a-e) Sin Bearer → 401 en GET/list, GET/{id}, POST, PATCH, DELETE. TEST D (No rompe): (D1) GET /warehouse/stock con auth → 200; (D2) POST /warehouse/zones + GET /warehouse/zones/by-qr/{qr} → 200 con {zone, locations}; (D2c) by-qr sin auth → 401; (D3) Admin POST /projects con budget=25000.0 → 200 con budget=25000.0 (respeta presupuesto ADMIN). 42/42 PASS, 0 FAIL."
+
+agent_communication:
+    -agent: "main"
+    -message: "Cambios para que WORKER pueda crear obras sin ver presupuesto. Tests manuales locales pasan (Worker POST con budget=5000 → respuesta budget=None; Admin PATCH {budget:12000} → 200; Worker GET sigue 200 con budget=None; Admin GET ve 12000). Listo para testeo formal del agente."
+    -agent: "testing"
+    -message: "WORKER permissions for projects + ProjectPatch verificados con /app/backend_test.py contra http://localhost:8001/api — 42/42 aserciones pasan. RESUMEN: (A) WORKER puede POST /api/projects (200), respuesta tiene budget=None y worker se auto-añade a assigned_worker_ids; (B) PATCH parcial con ProjectPatch funciona — admin PATCH {budget:12000} sobre obra de worker no wipea assigned_worker_ids, worker conserva acceso (GET 200) con budget=None; admin PATCH solo {name} preserva budget; (C) Worker PATCH/DELETE → 403; segundo worker NO ve obra de primer worker (GET → 403, list no incluye); sin Bearer → 401 en todos los endpoints de /projects; (D) /warehouse/stock 200, /warehouse/zones/by-qr/{qr} 200 con zone+locations, Admin POST /projects respeta budget enviado (25000.0). Todos los criterios PASS. Sistema operativo."
 
 backend:
   - task: "Warehouse dashboard rewrite (GET /api/warehouse/dashboard) — lots_count + stock_value desde storage_locations"

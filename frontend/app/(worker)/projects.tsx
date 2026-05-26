@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
-import { Card, StatusBadge, Skeleton, EmptyState, ProgressBar } from '../../src/ui';
+import { Card, StatusBadge, Skeleton, EmptyState, ProgressBar, FAB } from '../../src/ui';
 import { api } from '../../src/api';
 
 export default function WorkerProjects() {
@@ -31,13 +31,20 @@ export default function WorkerProjects() {
         </View>
       ) : data.length === 0 ? (
         <View style={{ paddingHorizontal: SPACING.lg }}>
-          <Card><EmptyState icon="briefcase-outline" title="Sin obras" subtitle="No tienes obras asignadas todavía." /></Card>
+          <Card>
+            <EmptyState
+              icon="briefcase-outline"
+              title="Sin obras"
+              subtitle="Crea una nueva obra o espera a que te asignen una."
+              action={{ label: 'Crear obra', onPress: () => router.push('/project/new') }}
+            />
+          </Card>
         </View>
       ) : (
         <FlatList
           data={data}
           keyExtractor={(i) => i.id}
-          contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 32 }}
+          contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 96 }}
           ItemSeparatorComponent={() => <View style={{ height: SPACING.md }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           renderItem={({ item }) => (
@@ -67,6 +74,9 @@ export default function WorkerProjects() {
           )}
         />
       )}
+
+      {/* FAB to create a new project — WORKER can create but the form hides budget. */}
+      <FAB onPress={() => router.push('/project/new')} icon="add" testID="worker-new-project" />
     </View>
   );
 }

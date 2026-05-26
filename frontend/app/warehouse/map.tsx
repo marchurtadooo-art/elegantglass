@@ -317,7 +317,7 @@ function StockFlowModal({
             <Text style={[modalStyles.infoCode, { color: s.fg }]}>{loc.material_code}</Text>
             <Text style={[modalStyles.infoName, { color: s.fg }]}>{loc.material?.name || ''}</Text>
             <Text style={[modalStyles.infoQty, { color: s.fg }]}>
-              {loc.quantity} <Text style={{ fontSize: 18 }}>{loc.material?.unit || ''}</Text>
+              {loc.quantity} <Text style={{ fontSize: 18 }}>ud</Text>
             </Text>
           </View>
 
@@ -353,7 +353,7 @@ function StockFlowModal({
                 <Text style={modalStyles.stepLabel}>{direction === 'IN' ? 'Entrada de material' : 'Salida de material'}</Text>
                 <View style={modalStyles.qtyBox}>
                   <Text style={modalStyles.qtyValue}>{qty || '0'}</Text>
-                  <Text style={modalStyles.qtyUnit}>{loc.material?.unit || ''}</Text>
+                  <Text style={modalStyles.qtyUnit}>ud</Text>
                 </View>
                 <View style={modalStyles.numpad}>
                   {['7','8','9','4','5','6','1','2','3','.','0','⌫'].map((k) => (
@@ -373,11 +373,11 @@ function StockFlowModal({
                   <ReviewRow label="Ubicación" value={loc.qr_code} />
                   <ReviewRow label="Material" value={`${loc.material_code} · ${loc.material?.name || ''}`} />
                   <ReviewRow label="Operación" value={direction === 'IN' ? 'Entrada (+)' : 'Salida (−)'} color={direction === 'IN' ? STATUS.OK.tag : STATUS.OUT.tag} />
-                  <ReviewRow label="Cantidad" value={`${numericQty} ${loc.material?.unit || ''}`} bold />
-                  <ReviewRow label="Stock antes" value={`${loc.quantity} ${loc.material?.unit || ''}`} />
+                  <ReviewRow label="Cantidad" value={`${numericQty} ud`} bold />
+                  <ReviewRow label="Stock antes" value={`${loc.quantity} ud`} />
                   <ReviewRow
                     label="Stock después"
-                    value={`${(loc.quantity + (direction === 'IN' ? numericQty : -numericQty))} ${loc.material?.unit || ''}`}
+                    value={`${(loc.quantity + (direction === 'IN' ? numericQty : -numericQty))} ud`}
                     bold
                   />
                 </View>
