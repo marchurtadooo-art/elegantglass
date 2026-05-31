@@ -65,7 +65,7 @@ export default function Stock() {
                 <Text style={[TYPO.body, { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }]} numberOfLines={1}>{item.category} · {item.lot_count} pos.{item.low_stock ? ' · BAJO' : ''}</Text>
               </View>
               <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                <Text style={[TYPO.h3, item.low_stock ? { color: COLORS.warning } : null]} numberOfLines={1}>{item.total} <Text style={[TYPO.body, { fontSize: 13 }]}>{item.unit}</Text></Text>
+                <Text style={[TYPO.h3, item.low_stock ? { color: COLORS.warning } : null]} numberOfLines={1}>{item.total} <Text style={[TYPO.body, { fontSize: 13 }]}>ud</Text></Text>
                 {!isWorker && item.value != null ? <Text style={[TYPO.body, { color: COLORS.textTertiary, fontSize: 12 }]} numberOfLines={1}>€{item.value.toLocaleString('es-ES', { maximumFractionDigits: 0 })}</Text> : null}
               </View>
             </View>

@@ -15,11 +15,11 @@
  * A floating QR scan button opens /warehouse/scan?return=map which can
  * jump directly to a location by QR.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl,
   Modal, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
-  useWindowDimensions,
+  useWindowDimensions, InteractionManager,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +27,11 @@ import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { HeaderBar, Skeleton, EmptyState, Card } from '../../src/ui';
 import { api, apiError } from '../../src/api';
+
+// Module-level cache so re-entering the screen within TTL skips the network call
+// and the map appears instantly (huge perceived-perf win on flaky connections).
+const LOCATIONS_CACHE: { data: any[] | null; at: number } = { data: null, at: 0 };
+const LOCATIONS_TTL_MS = 8_000;
 
 type Loc = {
   id: string;
@@ -55,24 +60,43 @@ export default function WarehouseMap() {
   const insets = useSafeAreaInsets();
   const { width: winW } = useWindowDimensions();
   const params = useLocalSearchParams<{ qr?: string; zoneNumber?: string }>();
-  const [locs, setLocs] = useState<Loc[] | null>(null);
+  // Seed from cache so the map appears instantly on re-entry (no skeleton flash)
+  const [locs, setLocs] = useState<Loc[] | null>(() => {
+    if (LOCATIONS_CACHE.data && Date.now() - LOCATIONS_CACHE.at < LOCATIONS_TTL_MS) {
+      return LOCATIONS_CACHE.data as Loc[];
+    }
+    return null;
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [active, setActive] = useState<Loc | null>(null);
   const [zoneFilter, setZoneFilter] = useState<number | null>(null);
+  const interactionRef = useRef<{ cancel: () => void } | null>(null);
 
   const isTablet = winW >= 700;
   const cellW = isTablet ? '24%' : '48%';
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    // Skip refetch if we have fresh data — avoids redundant calls on back/forward
+    if (!force && LOCATIONS_CACHE.data && Date.now() - LOCATIONS_CACHE.at < LOCATIONS_TTL_MS) {
+      setLocs(LOCATIONS_CACHE.data as Loc[]);
+      return;
+    }
     try {
       const r = await api.get('/warehouse/locations');
-      setLocs(r.data || []);
+      const data = r.data || [];
+      LOCATIONS_CACHE.data = data;
+      LOCATIONS_CACHE.at = Date.now();
+      setLocs(data);
     } catch (e) {
       Alert.alert('Error', apiError(e));
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Defer the fetch until the navigation animation finishes — pantalla aparece sin jank.
+  useFocusEffect(useCallback(() => {
+    interactionRef.current = InteractionManager.runAfterInteractions(() => { load(); });
+    return () => { interactionRef.current?.cancel?.(); };
+  }, [load]));
 
   // Allow opening a specific location via deep-link ?qr=Z1-F3-COR-7905
   useFocusEffect(useCallback(() => {
@@ -89,7 +113,7 @@ export default function WarehouseMap() {
     if (!Number.isNaN(n)) setZoneFilter(n);
   }, [params?.zoneNumber]));
 
-  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+  const onRefresh = async () => { setRefreshing(true); await load(true); setRefreshing(false); };
 
   const byZone = useMemo(() => {
     const map: Record<number, { zone_id: string; zone_number: number; zone_name: string; items: Loc[] }> = {};
@@ -188,7 +212,13 @@ export default function WarehouseMap() {
           loc={active}
           onClose={() => setActive(null)}
           onSaved={(updated) => {
-            setLocs((prev) => (prev || []).map((l) => l.id === updated.id ? { ...l, ...updated } : l));
+            setLocs((prev) => {
+              const next = (prev || []).map((l) => l.id === updated.id ? { ...l, ...updated } : l);
+              // Keep cache in sync so re-entering shows the new quantity immediately
+              LOCATIONS_CACHE.data = next;
+              LOCATIONS_CACHE.at = Date.now();
+              return next;
+            });
             setActive(null);
           }}
         />
@@ -221,7 +251,7 @@ const Cell = React.memo(function Cell({ loc, width, onPress }: { loc: Loc; width
       </Text>
       <View style={styles.cellFooter}>
         <Text style={[styles.cellQty, { color: s.fg }]} numberOfLines={1}>{loc.quantity}</Text>
-        <Text style={[styles.cellUnit, { color: s.fg }]} numberOfLines={1}>{loc.material?.unit || ''}</Text>
+        <Text style={[styles.cellUnit, { color: s.fg }]} numberOfLines={1}>ud</Text>
       </View>
     </TouchableOpacity>
   );
