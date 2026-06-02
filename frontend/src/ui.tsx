@@ -320,10 +320,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg, height: 56, borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
   segmented: {
-    flexDirection: 'row', backgroundColor: COLORS.background, borderRadius: RADIUS.md, padding: 4,
+    flexDirection: 'row', backgroundColor: COLORS.background, borderRadius: RADIUS.md, padding: 4, gap: 4,
   },
   segItem: {
     flex: 1, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.sm,
+    paddingHorizontal: 14, minWidth: 76,
   },
   segItemActive: {
     backgroundColor: COLORS.surface,
