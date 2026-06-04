@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO, MAT_CATEGORIES } from '../../src/theme';
-import { Card, HeaderBar, Skeleton, EmptyState } from '../../src/ui';
+import { Card, HeaderBar, Skeleton, EmptyState, FAB } from '../../src/ui';
 import { api } from '../../src/api';
 import { useAuth } from '../../src/auth';
 
@@ -45,7 +45,16 @@ export default function Stock() {
       {filtered === null ? (
         <View style={{ paddingHorizontal: SPACING.lg, gap: 8 }}>{[1,2,3,4,5].map((i) => <Skeleton key={i} height={60} />)}</View>
       ) : filtered.length === 0 ? (
-        <View style={{ paddingHorizontal: SPACING.lg }}><Card><EmptyState icon="cube-outline" title="Sin stock" /></Card></View>
+        <View style={{ paddingHorizontal: SPACING.lg }}>
+          <Card>
+            <EmptyState
+              icon="cube-outline"
+              title="Sin stock"
+              subtitle="Añade un nuevo material con el botón +"
+              action={{ label: 'Añadir material', onPress: () => router.push('/warehouse/material-new' as any) }}
+            />
+          </Card>
+        </View>
       ) : (
         <FlatList
           data={filtered}
@@ -72,6 +81,8 @@ export default function Stock() {
           )}
         />
       )}
+      {/* Manual material creation — both WORKER and ADMIN can add materials */}
+      <FAB onPress={() => router.push('/warehouse/material-new' as any)} icon="add" testID="stock-new-material" />
     </View>
   );
 }

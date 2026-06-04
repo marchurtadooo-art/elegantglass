@@ -762,12 +762,13 @@ async def list_materials(
 
 
 @api.post("/materials")
-async def create_material(body: MaterialIn, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
+async def create_material(body: MaterialIn, user: dict = Depends(require_role("ADMIN", "MANAGER", "WORKER"))):
     m = {
         "id": str(uuid.uuid4()),
         "company_id": user["company_id"],
         "is_archived": False,
         "created_at": now_utc(),
+        "created_by": user["id"],
         **body.dict(),
     }
     await db.materials.insert_one(m.copy())
@@ -780,6 +781,77 @@ async def update_material(mid: str, body: MaterialIn, user: dict = Depends(requi
     await db.materials.update_one({"id": mid, "company_id": user["company_id"]}, {"$set": upd})
     m = await db.materials.find_one({"id": mid})
     return serialize(m)
+
+
+# =========================================================
+# Material measurements (in-warehouse work measurements per material)
+# Workers and admins can register measurements (length, width, height, qty, color)
+# for materials they are currently working with at the warehouse.
+# =========================================================
+class MeasurementIn(BaseModel):
+    material_id: str
+    color: str = ""
+    length: Optional[float] = None  # mm or cm depending on user input; just a number
+    width: Optional[float] = None
+    height: Optional[float] = None
+    quantity: float = 1.0
+    unit: str = "mm"  # display unit shown alongside the numbers
+    notes: str = ""
+
+
+@api.post("/material-measurements")
+async def create_measurement(
+    body: MeasurementIn,
+    user: dict = Depends(require_role("ADMIN", "MANAGER", "WORKER")),
+):
+    mat = await db.materials.find_one(
+        {"id": body.material_id, "company_id": user["company_id"]}, {"_id": 0}
+    )
+    if not mat:
+        raise HTTPException(status_code=404, detail="Material no encontrado")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "company_id": user["company_id"],
+        "material_id": body.material_id,
+        "material_name": mat.get("name") or mat.get("code") or "",
+        "material_code": mat.get("code", ""),
+        "color": body.color or "",
+        "length": body.length,
+        "width": body.width,
+        "height": body.height,
+        "quantity": body.quantity,
+        "unit": body.unit or "mm",
+        "notes": body.notes or "",
+        "worker_id": user["id"],
+        "worker_name": user.get("name") or user.get("email") or "",
+        "created_at": now_utc(),
+    }
+    await db.material_measurements.insert_one(doc.copy())
+    return serialize(doc)
+
+
+@api.get("/material-measurements")
+async def list_measurements(
+    material_id: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
+    flt: dict = {"company_id": user["company_id"]}
+    if material_id:
+        flt["material_id"] = material_id
+    rows = await db.material_measurements.find(flt, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return rows
+
+
+@api.delete("/material-measurements/{mid}")
+async def delete_measurement(mid: str, user: dict = Depends(get_current_user)):
+    # Workers can only delete their own, admins/managers can delete any
+    doc = await db.material_measurements.find_one({"id": mid, "company_id": user["company_id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Medida no encontrada")
+    if user["role"] == "WORKER" and doc.get("worker_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para borrar esta medida")
+    await db.material_measurements.delete_one({"id": mid, "company_id": user["company_id"]})
+    return {"ok": True}
 
 
 # =========================================================

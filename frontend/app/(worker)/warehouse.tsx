@@ -71,6 +71,7 @@ export default function WarehouseTab() {
         <Action icon="qr-code-outline" label="Escanear QR" onPress={() => router.push('/warehouse/scan')} />
         {isManager ? <Action icon="archive-outline" label="Recibir material" onPress={() => router.push('/warehouse/receive')} /> : null}
         <Action icon="layers-outline" label="Stock" onPress={() => router.push('/warehouse/stock')} />
+        <Action icon="resize-outline" label="Medidas" onPress={() => router.push('/warehouse/measurements' as any)} />
         <Action icon="business-outline" label="Zonas" onPress={() => router.push('/warehouse/zones')} />
       </View>
 
