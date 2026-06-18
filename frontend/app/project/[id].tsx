@@ -45,6 +45,33 @@ export default function ProjectDetail() {
     } catch (e) { Alert.alert('Error', apiError(e)); }
   };
 
+  // IMPORTANT: This hook MUST be declared BEFORE any conditional early-return.
+  // If we put it after `if (!project) return ...`, React will see a different
+  // number of hooks between renders (when project is null vs. loaded) and the
+  // app will freeze with an "Invalid hook call" violation.
+  const handleDelete = useCallback(() => {
+    if (!project) return;
+    Alert.alert(
+      'Borrar obra',
+      `¿Borrar "${project.name}"? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Borrar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/projects/${id}`);
+              router.back();
+            } catch (e) {
+              Alert.alert('Error', apiError(e));
+            }
+          },
+        },
+      ]
+    );
+  }, [project, id]);
+
   const [busyReport, setBusyReport] = useState<null | 'dl' | 'share'>(null);
   const generateReport = async (mode: 'dl' | 'share') => {
     setBusyReport(mode);
@@ -100,29 +127,6 @@ export default function ProjectDetail() {
   };
 
   const canDelete = !isWorker || project?.manager_id === user?.id;
-
-  const handleDelete = useCallback(() => {
-    if (!project) return;
-    Alert.alert(
-      'Borrar obra',
-      `¿Borrar "${project.name}"? Esta acción no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Borrar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/projects/${id}`);
-              router.back();
-            } catch (e) {
-              Alert.alert('Error', apiError(e));
-            }
-          },
-        },
-      ]
-    );
-  }, [project, id]);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
