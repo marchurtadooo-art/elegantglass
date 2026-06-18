@@ -99,17 +99,47 @@ export default function ProjectDetail() {
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`).catch(() => {});
   };
 
+  const canDelete = !isWorker || project?.manager_id === user?.id;
+
+  const handleDelete = useCallback(() => {
+    if (!project) return;
+    Alert.alert(
+      'Borrar obra',
+      `¿Borrar "${project.name}"? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Borrar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/projects/${id}`);
+              router.back();
+            } catch (e) {
+              Alert.alert('Error', apiError(e));
+            }
+          },
+        },
+      ]
+    );
+  }, [project, id]);
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
       <HeaderBar
         title={project.name}
         onBack={() => router.back()}
         right={
-          isWorker ? null : (
-            <TouchableOpacity testID="edit-project" onPress={() => router.push({ pathname: '/project/new', params: { id } })}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <TouchableOpacity testID="edit-project" onPress={() => router.push({ pathname: '/project/new', params: { id } })} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
               <Icon name="create-outline" size={22} color={COLORS.primary} />
             </TouchableOpacity>
-          )
+            {canDelete ? (
+              <TouchableOpacity testID="delete-project" onPress={handleDelete} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
+                <Icon name="trash-outline" size={20} color={COLORS.danger} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         }
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
@@ -243,10 +273,14 @@ function ResumenTab({ project, isWorker, fmtEur }: any) {
         <KV label="Teléfono" value={project.client_phone || '—'} />
         {!isWorker ? <KV label="Email" value={project.client_email || '—'} /> : null}
       </Card>
+      <Card>
+        <Text style={[TYPO.caption, { marginBottom: 8 }]}>PRESUPUESTO</Text>
+        <KV label="Nº presupuesto" value={project.quote_number || '—'} />
+      </Card>
       {!isWorker ? (
         <Card>
           <Text style={[TYPO.caption, { marginBottom: 8 }]}>FINANZAS</Text>
-          <KV label="Presupuesto" value={fmtEur(project.budget)} />
+          <KV label="Importe" value={fmtEur(project.budget)} />
           <KV label="Gastado" value={fmtEur(project.spent)} />
           <KV label="Restante" value={fmtEur(project.remaining)} />
         </Card>

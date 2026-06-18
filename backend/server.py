@@ -279,6 +279,7 @@ class ProjectIn(BaseModel):
     end_date: Optional[str] = None
     actual_end_date: Optional[str] = None
     budget: float = 0.0
+    quote_number: str = ""
     client_name: str = ""
     client_phone: str = ""
     client_email: str = ""
@@ -288,13 +289,7 @@ class ProjectIn(BaseModel):
 
 
 class ProjectPatch(BaseModel):
-    """Partial update — every field is optional so PATCH can target a subset.
-
-    Pydantic's `exclude_unset=True` plus all-Optional fields lets us send e.g.
-    `{"budget": 12000}` without nuking the rest of the project (assigned workers,
-    name, dates...). Critical so that a manager adding budget to a worker-created
-    obra never strips the worker's access.
-    """
+    """Partial update — every field is optional so PATCH can target a subset."""
     name: Optional[str] = None
     description: Optional[str] = None
     address: Optional[str] = None
@@ -305,6 +300,7 @@ class ProjectPatch(BaseModel):
     end_date: Optional[str] = None
     actual_end_date: Optional[str] = None
     budget: Optional[float] = None
+    quote_number: Optional[str] = None
     client_name: Optional[str] = None
     client_phone: Optional[str] = None
     client_email: Optional[str] = None
@@ -713,11 +709,23 @@ async def create_project(request: Request, body: ProjectIn, user: dict = Depends
 
 @api.patch("/projects/{project_id}")
 async def update_project(
-    project_id: str, body: ProjectPatch, user: dict = Depends(require_role("ADMIN", "MANAGER"))
+    project_id: str, body: ProjectPatch, user: dict = Depends(require_role("ADMIN", "MANAGER", "WORKER"))
 ):
+    # Load existing project + verify access
+    proj = await db.projects.find_one({"id": project_id, "company_id": user["company_id"]})
+    if not proj:
+        raise HTTPException(status_code=404, detail="Obra no encontrada")
+    if user["role"] == "WORKER":
+        # Worker can only edit obras they created OR are assigned to
+        if proj.get("manager_id") != user["id"] and user["id"] not in (proj.get("assigned_worker_ids") or []):
+            raise HTTPException(status_code=403, detail="Sin acceso a esta obra")
+
     # Only update fields the caller actually sent — never wipe assigned_worker_ids
-    # (or any other field) just because the model has a default value for it.
     upd = body.dict(exclude_unset=True)
+    # WORKERs never touch financial fields. Strip them silently.
+    if user["role"] == "WORKER":
+        for fld in ("budget",):
+            upd.pop(fld, None)
     upd["updated_at"] = now_utc()
     await db.projects.update_one(
         {"id": project_id, "company_id": user["company_id"]}, {"$set": upd}
@@ -727,8 +735,14 @@ async def update_project(
 
 
 @api.delete("/projects/{project_id}")
-async def delete_project(request: Request, project_id: str, user: dict = Depends(require_role("ADMIN", "MANAGER"))):
-    proj = await db.projects.find_one({"id": project_id, "company_id": user["company_id"]}, {"_id": 0, "name": 1})
+async def delete_project(request: Request, project_id: str, user: dict = Depends(require_role("ADMIN", "MANAGER", "WORKER"))):
+    proj = await db.projects.find_one({"id": project_id, "company_id": user["company_id"]}, {"_id": 0, "name": 1, "manager_id": 1})
+    if not proj:
+        raise HTTPException(status_code=404, detail="Obra no encontrada")
+    if user["role"] == "WORKER":
+        # Workers can only delete obras they created themselves
+        if proj.get("manager_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Solo el creador puede borrar esta obra")
     await db.projects.delete_one({"id": project_id, "company_id": user["company_id"]})
     await audit_log(
         db, action="PROJECT_DELETE", resource="project", resource_id=project_id,

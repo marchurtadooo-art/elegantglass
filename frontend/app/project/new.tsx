@@ -12,8 +12,7 @@ export default function NewProject() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string }>();
   const editing = !!params.id;
-  const { user } = useAuth();
-  const isWorker = user?.role === 'WORKER';
+  const { user: _user } = useAuth();
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
@@ -21,7 +20,7 @@ export default function NewProject() {
   const [address, setAddress] = useState('');
   const [client, setClient] = useState('');
   const [phone, setPhone] = useState('');
-  const [budget, setBudget] = useState('');
+  const [quoteNumber, setQuoteNumber] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -29,12 +28,11 @@ export default function NewProject() {
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // WORKER never sees the budget step. Steps: 0 info, 1 dates+notes, 2 team, 3 review
+  // Same step flow for everyone now — the form no longer asks for money.
+  // The financial budget (€) is still managed separately from project detail.
   const STEPS_LABELS = useMemo(() => (
-    isWorker
-      ? ['Información', 'Fechas y notas', 'Equipo', 'Revisar']
-      : ['Información', 'Presupuesto', 'Equipo', 'Revisar']
-  ), [isWorker]);
+    ['Información', 'Presupuesto y fechas', 'Equipo', 'Revisar']
+  ), []);
   const totalSteps = STEPS_LABELS.length;
 
   useEffect(() => {
@@ -44,14 +42,14 @@ export default function NewProject() {
         const p = r.data;
         setName(p.name); setDescription(p.description || ''); setAddress(p.address || '');
         setClient(p.client_name || ''); setPhone(p.client_phone || '');
-        if (!isWorker) setBudget(String(p.budget || ''));
+        setQuoteNumber(p.quote_number || '');
         setStartDate(p.start_date || '');
         setEndDate(p.end_date || '');
         setNotes(p.notes || '');
         setSelectedWorkers(p.assigned_worker_ids || []);
       }).catch(() => {});
     }
-  }, [editing, params.id, isWorker]);
+  }, [editing, params.id]);
 
   const next = () => {
     if (step === 0 && (!name || !address || !client)) {
@@ -71,15 +69,12 @@ export default function NewProject() {
       status: editing ? undefined : 'PENDING',
       client_name: client,
       client_phone: phone,
+      quote_number: quoteNumber.trim(),
       start_date: startDate || null,
       end_date: endDate || null,
       notes,
       assigned_worker_ids: selectedWorkers,
     };
-    // WORKERs never send budget. Backend also forces budget = 0 for that role.
-    if (!isWorker) {
-      body.budget = parseFloat(budget) || 0;
-    }
     try {
       if (editing) await api.patch(`/projects/${params.id}`, { ...body, status: 'ACTIVE' });
       else await api.post('/projects', body);
@@ -114,21 +109,18 @@ export default function NewProject() {
             </View>
           )}
 
-          {/* Step 1 differs by role:
-              - ADMIN/MANAGER → Presupuesto + fecha fin
-              - WORKER → Fecha inicio + fecha fin + notas (NO budget visible) */}
-          {step === 1 && !isWorker && (
+          {/* Step 1: Presupuesto (texto/identificador) y fechas — sin €.
+              El campo financiero real sigue siendo opcional y se gestiona aparte. */}
+          {step === 1 && (
             <View>
-              <Text style={[TYPO.h2, { marginBottom: SPACING.md }]}>2. Presupuesto</Text>
-              <Input label="Presupuesto total (€)" value={budget} onChangeText={setBudget} keyboardType="decimal-pad" testID="proj-budget" />
-              <Input label="Fecha inicio (YYYY-MM-DD)" value={startDate} onChangeText={setStartDate} />
-              <Input label="Fecha fin estimada (YYYY-MM-DD)" value={endDate} onChangeText={setEndDate} />
-              <Input label="Notas internas" value={notes} onChangeText={setNotes} multiline />
-            </View>
-          )}
-          {step === 1 && isWorker && (
-            <View>
-              <Text style={[TYPO.h2, { marginBottom: SPACING.md }]}>2. Fechas y notas</Text>
+              <Text style={[TYPO.h2, { marginBottom: SPACING.md }]}>2. Presupuesto y fechas</Text>
+              <Input
+                label="Número de presupuesto"
+                value={quoteNumber}
+                onChangeText={setQuoteNumber}
+                placeholder="Ej: P-2026-001"
+                testID="proj-quote-number"
+              />
               <Input label="Fecha inicio (YYYY-MM-DD)" value={startDate} onChangeText={setStartDate} testID="proj-start-date" />
               <Input label="Fecha fin estimada (YYYY-MM-DD)" value={endDate} onChangeText={setEndDate} testID="proj-end-date" />
               <Input label="Notas" value={notes} onChangeText={setNotes} multiline testID="proj-notes" />
@@ -167,8 +159,7 @@ export default function NewProject() {
                 <Row label="Nombre" value={name} />
                 <Row label="Cliente" value={client} />
                 <Row label="Dirección" value={address} />
-                {/* Budget row hidden for WORKER */}
-                {!isWorker ? <Row label="Presupuesto" value={`€${budget || 0}`} /> : null}
+                <Row label="Nº presupuesto" value={quoteNumber || '—'} />
                 <Row label="Fecha inicio" value={startDate || '—'} />
                 <Row label="Fin estimado" value={endDate || '—'} />
                 <Row label="Operarios" value={`${selectedWorkers.length}`} />
