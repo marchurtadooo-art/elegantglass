@@ -687,6 +687,8 @@ async def create_project(request: Request, body: ProjectIn, user: dict = Depends
         assigned = list(set((proj.get("assigned_worker_ids") or []) + [user["id"]]))
         proj["assigned_worker_ids"] = assigned
     await db.projects.insert_one(proj.copy())
+    # Auto-create the project stages (Seguimiento de Obra) — all PENDING.
+    await _ensure_project_stages(pid, user["company_id"])
     await audit_log(
         db, action="PROJECT_CREATE", resource="project", resource_id=pid,
         request=request, user=user, extra={"name": proj.get("name")},
@@ -748,7 +750,219 @@ async def delete_project(request: Request, project_id: str, user: dict = Depends
         db, action="PROJECT_DELETE", resource="project", resource_id=project_id,
         request=request, user=user, extra={"name": (proj or {}).get("name")},
     )
+    # Clean up related stages
+    await db.project_stages.delete_many({"project_id": project_id, "company_id": user["company_id"]})
     return {"ok": True}
+
+
+# =========================================================
+# Seguimiento de obra — project stages (etapas) (Fase 1 MVP)
+# =========================================================
+# Stage groups + ordered template. When a project is created we insert one
+# row per template entry, all in status PENDING. Workers and admins can
+# update status, fechas, lines (proveedor/equipo + responsables) y notas.
+PROJECT_STAGE_TEMPLATE = [
+    # group, type, label, multi_line (True => admits "+ añadir línea")
+    ("INICIO",   "entrada_proyecto",       "Entrada del proyecto",         False),
+    ("INICIO",   "medicion",               "Medición",                     False),
+    ("INICIO",   "materiales_y_colores",   "Materiales y colores",         False),
+    ("INICIO",   "presupuesto",            "Presupuesto",                  False),
+    ("INICIO",   "aceptacion_presupuesto", "Aceptación del presupuesto",   False),
+
+    ("COMPRAS",  "pedido_perfiles",        "Pedido de perfiles",           True),
+    ("COMPRAS",  "recepcion_perfiles",     "Recepción de perfiles",        True),
+    ("COMPRAS",  "pedido_cristales",       "Pedido de cristales",          True),
+    ("COMPRAS",  "recepcion_cristales",    "Recepción de cristales",       True),
+
+    ("TALLER",   "recepcion_taller",       "Recepción de trabajo en taller", False),
+    ("TALLER",   "fecha_fabricacion",      "Fecha estimada de fabricación", False),
+    ("TALLER",   "corte",                  "Corte",                        False),
+    ("TALLER",   "ensamblaje",             "Ensamblaje",                   False),
+
+    ("MONTAJE",  "fecha_montaje",          "Fecha de montaje (prevista)",  False),
+    ("MONTAJE",  "montaje_obra",           "Montaje en obra",              True),
+    ("MONTAJE",  "termino",                "Término",                      False),
+
+    ("GENERAL",  "observaciones",          "Observaciones",                False),
+]
+
+
+async def _ensure_project_stages(project_id: str, company_id: str) -> None:
+    """Insert template stages for a project if they don't exist yet.
+
+    Idempotent — used both on project create AND lazily on GET /stages so that
+    obras existentes (creadas antes de esta feature) reciban sus etapas la
+    primera vez que el cliente las pida.
+    """
+    existing = await db.project_stages.count_documents({"project_id": project_id})
+    if existing > 0:
+        return
+    now = now_utc()
+    docs = []
+    for idx, (group, stype, label, multi) in enumerate(PROJECT_STAGE_TEMPLATE):
+        docs.append({
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "company_id": company_id,
+            "group": group,
+            "type": stype,
+            "label": label,
+            "order": idx,
+            "multi_line": multi,
+            "status": "PENDING",
+            "due_date": None,
+            "actual_date": None,
+            "start_date": None,
+            "end_date": None,
+            "notes": "",
+            "lines": [],
+            "updated_by": None,
+            "updated_by_name": "",
+            "updated_at": now,
+            "created_at": now,
+        })
+    if docs:
+        await db.project_stages.insert_many(docs)
+
+
+def _is_overdue(stage: dict) -> bool:
+    """A stage is 'Retraso' only if due_date is in the past AND no actual/end date."""
+    due = stage.get("due_date")
+    if not due:
+        return False
+    if stage.get("actual_date") or stage.get("end_date") or stage.get("status") == "DONE":
+        return False
+    try:
+        d = datetime.fromisoformat(due).date()
+    except Exception:
+        return False
+    return d < now_utc().date()
+
+
+async def _stage_access_check(project_id: str, user: dict) -> dict:
+    """Ensure the user can see/edit this project. Returns the project doc."""
+    proj = await db.projects.find_one({"id": project_id, "company_id": user["company_id"]}, {"_id": 0})
+    if not proj:
+        raise HTTPException(status_code=404, detail="Obra no encontrada")
+    if user["role"] == "WORKER":
+        if proj.get("manager_id") != user["id"] and user["id"] not in (proj.get("assigned_worker_ids") or []):
+            raise HTTPException(status_code=403, detail="Sin acceso a esta obra")
+    return proj
+
+
+@api.get("/projects/{project_id}/stages")
+async def list_project_stages(project_id: str, user: dict = Depends(get_current_user)):
+    await _stage_access_check(project_id, user)
+    # Lazy seed for legacy projects
+    await _ensure_project_stages(project_id, user["company_id"])
+    rows = await db.project_stages.find(
+        {"project_id": project_id, "company_id": user["company_id"]}, {"_id": 0},
+    ).sort("order", 1).to_list(200)
+    for r in rows:
+        r["is_overdue"] = _is_overdue(r)
+    return rows
+
+
+class StagePatch(BaseModel):
+    status: Optional[Literal["PENDING", "IN_PROGRESS", "DONE"]] = None
+    due_date: Optional[str] = None
+    actual_date: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@api.patch("/projects/{project_id}/stages/{stage_id}")
+async def update_project_stage(
+    project_id: str, stage_id: str, body: StagePatch,
+    user: dict = Depends(get_current_user),
+):
+    await _stage_access_check(project_id, user)
+    upd = body.dict(exclude_unset=True)
+    upd["updated_at"] = now_utc()
+    upd["updated_by"] = user["id"]
+    upd["updated_by_name"] = user.get("name") or user.get("email") or ""
+    # If marking DONE without an actual_date, fill today.
+    if upd.get("status") == "DONE":
+        upd.setdefault("actual_date", now_utc().date().isoformat())
+    r = await db.project_stages.update_one(
+        {"id": stage_id, "project_id": project_id, "company_id": user["company_id"]},
+        {"$set": upd},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Etapa no encontrada")
+    s = await db.project_stages.find_one(
+        {"id": stage_id, "project_id": project_id, "company_id": user["company_id"]}, {"_id": 0},
+    )
+    if s:
+        s["is_overdue"] = _is_overdue(s)
+    return s
+
+
+class StageLineIn(BaseModel):
+    provider_or_team: str = ""
+    date: Optional[str] = None
+    responsibles: List[str] = []
+    notes: str = ""
+
+
+@api.post("/projects/{project_id}/stages/{stage_id}/lines")
+async def add_stage_line(
+    project_id: str, stage_id: str, body: StageLineIn,
+    user: dict = Depends(get_current_user),
+):
+    await _stage_access_check(project_id, user)
+    line = {
+        "id": str(uuid.uuid4()),
+        **body.dict(),
+        "created_at": now_utc(),
+        "created_by": user["id"],
+        "created_by_name": user.get("name") or user.get("email") or "",
+    }
+    r = await db.project_stages.update_one(
+        {"id": stage_id, "project_id": project_id, "company_id": user["company_id"]},
+        {
+            "$push": {"lines": line},
+            "$set": {
+                "updated_at": now_utc(),
+                "updated_by": user["id"],
+                "updated_by_name": user.get("name") or user.get("email") or "",
+            },
+        },
+    )
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Etapa no encontrada")
+    s = await db.project_stages.find_one(
+        {"id": stage_id, "project_id": project_id, "company_id": user["company_id"]}, {"_id": 0},
+    )
+    if s:
+        s["is_overdue"] = _is_overdue(s)
+    return s
+
+
+@api.delete("/projects/{project_id}/stages/{stage_id}/lines/{line_id}")
+async def remove_stage_line(
+    project_id: str, stage_id: str, line_id: str,
+    user: dict = Depends(get_current_user),
+):
+    await _stage_access_check(project_id, user)
+    await db.project_stages.update_one(
+        {"id": stage_id, "project_id": project_id, "company_id": user["company_id"]},
+        {
+            "$pull": {"lines": {"id": line_id}},
+            "$set": {
+                "updated_at": now_utc(),
+                "updated_by": user["id"],
+                "updated_by_name": user.get("name") or user.get("email") or "",
+            },
+        },
+    )
+    s = await db.project_stages.find_one(
+        {"id": stage_id, "project_id": project_id, "company_id": user["company_id"]}, {"_id": 0},
+    )
+    if s:
+        s["is_overdue"] = _is_overdue(s)
+    return s
 
 
 # =========================================================

@@ -5,12 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../src/Icon';
 import { COLORS, SPACING, TYPO } from '../../src/theme';
 import { Button, Card, HeaderBar, ProgressBar, Segmented, Skeleton, StatusBadge, Avatar, EmptyState } from '../../src/ui';
+import Seguimiento from '../../src/seguimiento/Seguimiento';
 import { PhotoViewer } from '../../src/PhotoViewer';
 import { api, apiError } from '../../src/api';
 import { useAuth } from '../../src/auth';
 import { downloadBase64File, shareBase64File } from '../../src/files';
 
-type Tab = 'RESUMEN' | 'PARTES' | 'FOTOS' | 'MATERIALES' | 'BALANCE' | 'EQUIPO';
+type Tab = 'RESUMEN' | 'SEGUIMIENTO' | 'PARTES' | 'FOTOS' | 'MATERIALES' | 'BALANCE' | 'EQUIPO';
 
 export default function ProjectDetail() {
   const insets = useSafeAreaInsets();
@@ -118,8 +119,8 @@ export default function ProjectDetail() {
 
   const fmtEur = (n: number) => n == null ? '—' : `€${n.toLocaleString('es-ES', { maximumFractionDigits: 0 })}`;
   const tabs: { key: Tab; label: string }[] = isWorker
-    ? [{ key: 'RESUMEN', label: 'Resumen' }, { key: 'PARTES', label: 'Partes' }, { key: 'FOTOS', label: 'Fotos' }, { key: 'MATERIALES', label: 'Material' }]
-    : [{ key: 'RESUMEN', label: 'Resumen' }, { key: 'PARTES', label: 'Partes' }, { key: 'FOTOS', label: 'Fotos' }, { key: 'MATERIALES', label: 'Material' }, { key: 'BALANCE', label: 'Balance' }, { key: 'EQUIPO', label: 'Equipo' }];
+    ? [{ key: 'RESUMEN', label: 'Resumen' }, { key: 'SEGUIMIENTO', label: 'Seguimiento' }, { key: 'PARTES', label: 'Partes' }, { key: 'FOTOS', label: 'Fotos' }, { key: 'MATERIALES', label: 'Material' }]
+    : [{ key: 'RESUMEN', label: 'Resumen' }, { key: 'SEGUIMIENTO', label: 'Seguimiento' }, { key: 'PARTES', label: 'Partes' }, { key: 'FOTOS', label: 'Fotos' }, { key: 'MATERIALES', label: 'Material' }, { key: 'BALANCE', label: 'Balance' }, { key: 'EQUIPO', label: 'Equipo' }];
 
   const openMaps = () => {
     const q = encodeURIComponent(project.address);
@@ -253,6 +254,7 @@ export default function ProjectDetail() {
               <ResumenTab project={project} isWorker={isWorker} fmtEur={fmtEur} />
             </>
           )}
+          {tab === 'SEGUIMIENTO' && <Seguimiento projectId={id as string} />}
           {tab === 'PARTES' && <PartesTab logs={logs} isWorker={isWorker} onReview={reviewLog} onAdd={() => router.push({ pathname: '/log/new', params: { projectId: id } })} />}
           {tab === 'FOTOS' && <FotosTab photos={photos} onAdd={() => router.push({ pathname: '/photo/capture', params: { projectId: id } })} />}
           {tab === 'MATERIALES' && <MaterialesTab entries={entries} isWorker={isWorker} onAdd={() => router.push({ pathname: '/material/register', params: { projectId: id } })} fmtEur={fmtEur} />}
