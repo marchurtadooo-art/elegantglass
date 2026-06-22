@@ -10,11 +10,13 @@
  *
  * Barra de progreso: tramo hecho = negro sólido, tramo en curso = gris rayado.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl,
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
+  Share,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from 'expo-router';
 import { Icon } from '../Icon';
 import { api, apiError } from '../api';
@@ -67,15 +69,36 @@ export default function Seguimiento({ projectId }: { projectId: string }) {
   const [stages, setStages] = useState<Stage[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<Stage | null>(null);
+  const [clientStatus, setClientStatus] = useState<string>('');
+  const [editClientStatus, setEditClientStatus] = useState<string>('');
+  const [editingStatus, setEditingStatus] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const r = await api.get(`/projects/${projectId}/stages`);
       setStages(r.data || []);
     } catch (e) { console.warn(apiError(e)); }
+    try {
+      const r = await api.get(`/projects/${projectId}/client-status`);
+      const txt = r.data?.status_text || '';
+      setClientStatus(txt);
+      setEditClientStatus(txt);
+    } catch {}
   }, [projectId]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+
+  const copyStatus = async () => {
+    try {
+      await Clipboard.setStringAsync(editClientStatus);
+      Alert.alert('Copiado', 'Mensaje copiado al portapapeles.');
+    } catch {
+      Alert.alert('Error', 'No se pudo copiar.');
+    }
+  };
+  const shareStatus = async () => {
+    try { await Share.share({ message: editClientStatus }); } catch {}
+  };
 
   const grouped = useMemo(() => {
     const map: Record<string, Stage[]> = {};
@@ -113,7 +136,7 @@ export default function Seguimiento({ projectId }: { projectId: string }) {
     <>
       <ScrollView
         style={{ backgroundColor: BW.bg }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 140 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BW.black} />}
       >
         {/* ── Progress header ─────────────────────────────────────── */}
@@ -160,6 +183,54 @@ export default function Seguimiento({ projectId }: { projectId: string }) {
           onClose={() => setEditing(null)}
           onSaved={async () => { setEditing(null); await load(); }}
         />
+      ) : null}
+
+      {/* Bottom bar — Estado para el cliente (Fase 3) */}
+      {clientStatus ? (
+        <View style={styles.clientBar}>
+          {!editingStatus ? (
+            <>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.clientKicker}>ESTADO PARA EL CLIENTE</Text>
+                <Text style={styles.clientText} numberOfLines={3}>{editClientStatus}</Text>
+              </View>
+              <View style={styles.clientBtns}>
+                <TouchableOpacity onPress={() => setEditingStatus(true)} style={styles.clientIconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Icon name="create-outline" size={18} color={BW.black} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={shareStatus} style={styles.clientIconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Icon name="share-social-outline" size={18} color={BW.black} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={copyStatus} style={styles.clientCopyBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Icon name="copy-outline" size={16} color={BW.white} />
+                  <Text style={styles.clientCopyText}>Copiar</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clientKicker}>EDITAR MENSAJE</Text>
+              <TextInput
+                value={editClientStatus}
+                onChangeText={setEditClientStatus}
+                multiline
+                style={styles.clientEditInput}
+                placeholder="Mensaje para el cliente..."
+                placeholderTextColor={BW.textDim}
+                autoFocus
+              />
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity onPress={() => { setEditClientStatus(clientStatus); setEditingStatus(false); }} style={[styles.clientIconBtn, { flex: 1 }]}>
+                  <Text style={{ color: BW.black, fontWeight: '700' }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setEditingStatus(false)} style={[styles.clientCopyBtn, { flex: 1 }]}>
+                  <Icon name="checkmark" size={16} color={BW.white} />
+                  <Text style={styles.clientCopyText}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
       ) : null}
     </>
   );
@@ -302,6 +373,13 @@ function StageEditorModal({ stage, projectId, onClose, onSaved }: { stage: Stage
   const [notes, setNotes]           = useState(stage.notes       || '');
   const [saving, setSaving]         = useState(false);
 
+  // Special structured fields for "materiales_y_colores" stage
+  const isMC = stage.type === 'materiales_y_colores';
+  const meta: any = (stage as any).meta || {};
+  const [seriePerfil, setSeriePerfil]   = useState(meta.serie_perfil || '');
+  const [colorRal, setColorRal]         = useState(meta.color_ral || '');
+  const [tipoCristal, setTipoCristal]   = useState(meta.tipo_cristal || '');
+
   // For multi_line stages — pending new line
   const [provider, setProvider]   = useState('');
   const [lineDate, setLineDate]   = useState('');
@@ -311,13 +389,21 @@ function StageEditorModal({ stage, projectId, onClose, onSaved }: { stage: Stage
   const save = async () => {
     setSaving(true);
     try {
-      await api.patch(`/projects/${projectId}/stages/${stage.id}`, {
+      const body: any = {
         due_date: dueDate || null,
         actual_date: actualDate || null,
         start_date: startDate || null,
         end_date: endDate || null,
         notes,
-      });
+      };
+      if (isMC) {
+        body.meta = {
+          serie_perfil: seriePerfil.trim(),
+          color_ral: colorRal.trim(),
+          tipo_cristal: tipoCristal.trim(),
+        };
+      }
+      await api.patch(`/projects/${projectId}/stages/${stage.id}`, body);
       onSaved();
     } catch (e) { Alert.alert('Error', apiError(e)); setSaving(false); }
   };
@@ -366,7 +452,35 @@ function StageEditorModal({ stage, projectId, onClose, onSaved }: { stage: Stage
           <DateField label="Fecha de inicio" value={startDate} onChange={setStartDate} />
           <DateField label="Fecha de fin" value={endDate} onChange={setEndDate} />
 
-          <Text style={styles.fieldLabel}>Notas</Text>
+          {/* ── Materiales y colores: inputs estructurados específicos ── */}
+          {isMC ? (
+            <View style={styles.mcBox}>
+              <Text style={[styles.sectionTitle, { marginBottom: 10 }]}>Ficha técnica</Text>
+              <Text style={styles.fieldLabel}>Serie de perfil</Text>
+              <TextInput
+                value={seriePerfil} onChangeText={setSeriePerfil}
+                placeholder="Ej: Cor-2000, Cor-60, Cor-80 Industrial"
+                placeholderTextColor={BW.textDim}
+                style={styles.input}
+              />
+              <Text style={styles.fieldLabel}>Color / RAL / acabado</Text>
+              <TextInput
+                value={colorRal} onChangeText={setColorRal}
+                placeholder="Ej: RAL 9016, lacado blanco, anodizado plata"
+                placeholderTextColor={BW.textDim}
+                style={styles.input}
+              />
+              <Text style={styles.fieldLabel}>Tipo de cristal</Text>
+              <TextInput
+                value={tipoCristal} onChangeText={setTipoCristal}
+                placeholder="Ej: 4+4 templado, climalit 4/16/4 bajo emisivo"
+                placeholderTextColor={BW.textDim}
+                style={styles.input}
+              />
+            </View>
+          ) : null}
+
+          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Notas</Text>
           <TextInput
             value={notes}
             onChangeText={setNotes}
@@ -537,4 +651,32 @@ const styles = StyleSheet.create({
     backgroundColor: BW.white, borderWidth: 1, borderColor: BW.border, borderRadius: 10,
     padding: 12, marginTop: 8, gap: 8,
   },
+
+  // ─── Bottom bar: estado para el cliente ───
+  clientBar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: BW.white, borderTopWidth: 1, borderTopColor: BW.border,
+    padding: 14, paddingBottom: Platform.OS === 'ios' ? 24 : 14,
+  },
+  clientKicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.3, color: BW.textDim, marginBottom: 4 },
+  clientText: { fontSize: 13, color: BW.text, fontWeight: '600', lineHeight: 17 },
+  clientBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  clientIconBtn: {
+    width: 38, height: 38, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 8, borderWidth: 1, borderColor: BW.border, backgroundColor: BW.white,
+  },
+  clientCopyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: BW.black, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8,
+  },
+  clientCopyText: { color: BW.white, fontSize: 13, fontWeight: '700' },
+  clientEditInput: {
+    backgroundColor: BW.white, borderWidth: 1, borderColor: BW.border, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: BW.text,
+    minHeight: 72, textAlignVertical: 'top',
+  },
+
+  // ─── Materiales y colores ───
+  mcBox: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: BW.borderLight, gap: 4 },
 });

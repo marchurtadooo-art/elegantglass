@@ -863,6 +863,127 @@ async def list_project_stages(project_id: str, user: dict = Depends(get_current_
     return rows
 
 
+def _compose_client_status(stages: list, project_name: str) -> str:
+    """Compose a short client-facing status sentence based on stage states.
+
+    Walks groups in order (INICIO → COMPRAS → TALLER → MONTAJE) and picks the
+    most advanced milestone done or in-progress to summarise where the obra is.
+    """
+    by_type = {s["type"]: s for s in stages}
+    # Highest-priority "done" milestones drive the message.
+    if by_type.get("termino", {}).get("status") == "DONE":
+        return f"La obra «{project_name}» está finalizada. Gracias por confiar en nosotros."
+    if by_type.get("montaje_obra", {}).get("status") in ("IN_PROGRESS", "DONE") or any(
+        l for l in (by_type.get("montaje_obra", {}).get("lines") or [])
+    ):
+        return f"Estamos montando la obra «{project_name}» en su domicilio."
+    if by_type.get("ensamblaje", {}).get("status") in ("IN_PROGRESS", "DONE"):
+        return f"Ya estamos ensamblando los perfiles de «{project_name}» en taller."
+    if by_type.get("corte", {}).get("status") in ("IN_PROGRESS", "DONE"):
+        return f"Estamos cortando los perfiles de «{project_name}»."
+    if by_type.get("recepcion_cristales", {}).get("status") == "DONE":
+        return f"Hemos recibido los cristales de «{project_name}». Pasaremos a taller."
+    if by_type.get("recepcion_perfiles", {}).get("status") == "DONE":
+        return f"Hemos recibido los perfiles de «{project_name}». A la espera de cristales."
+    if by_type.get("pedido_cristales", {}).get("status") == "DONE":
+        return f"Pedido de cristales de «{project_name}» realizado al proveedor."
+    if by_type.get("pedido_perfiles", {}).get("status") == "DONE":
+        return f"Pedido de perfiles de «{project_name}» realizado al proveedor."
+    if by_type.get("aceptacion_presupuesto", {}).get("status") == "DONE":
+        return f"Presupuesto aceptado. Iniciamos compras para «{project_name}»."
+    if by_type.get("presupuesto", {}).get("status") == "DONE":
+        return f"Presupuesto enviado para «{project_name}». A la espera de confirmación."
+    if by_type.get("medicion", {}).get("status") == "DONE":
+        return f"Medición realizada en «{project_name}». Preparamos presupuesto."
+    return f"Hemos recibido los datos de «{project_name}». Próximo paso: medición."
+
+
+@api.get("/projects/{project_id}/client-status")
+async def project_client_status(project_id: str, user: dict = Depends(get_current_user)):
+    proj = await _stage_access_check(project_id, user)
+    await _ensure_project_stages(project_id, user["company_id"])
+    stages = await db.project_stages.find(
+        {"project_id": project_id, "company_id": user["company_id"]}, {"_id": 0},
+    ).to_list(200)
+    return {"status_text": _compose_client_status(stages, proj.get("name") or "su obra")}
+
+
+@api.get("/projects-with-progress")
+async def projects_with_progress(user: dict = Depends(get_current_user)):
+    """List of projects + stage counters + current stage + overdue flag.
+
+    Used by the new Seguimiento list (Fase 2). Single round-trip vs. N+1.
+    """
+    # Filter projects by role visibility (same logic as /projects)
+    flt: dict = {"company_id": user["company_id"]}
+    if user["role"] == "WORKER":
+        flt["$or"] = [
+            {"assigned_worker_ids": user["id"]},
+            {"manager_id": user["id"]},
+        ]
+    projects = await db.projects.find(flt, {"_id": 0}).sort("created_at", -1).to_list(500)
+    if not projects:
+        return []
+    pids = [p["id"] for p in projects]
+
+    # Aggregate stage counters per project in one go
+    pipe = [
+        {"$match": {"project_id": {"$in": pids}, "company_id": user["company_id"]}},
+        {"$group": {
+            "_id": "$project_id",
+            "total": {"$sum": 1},
+            "done": {"$sum": {"$cond": [{"$eq": ["$status", "DONE"]}, 1, 0]}},
+            "in_progress": {"$sum": {"$cond": [{"$eq": ["$status", "IN_PROGRESS"]}, 1, 0]}},
+            "stages": {"$push": "$$ROOT"},
+        }},
+    ]
+    rows = await db.project_stages.aggregate(pipe).to_list(len(pids))
+    by_pid = {r["_id"]: r for r in rows}
+
+    out = []
+    today = now_utc().date()
+    for p in projects:
+        p = filter_project_for_role(serialize(p), user["role"])
+        agg = by_pid.get(p["id"]) or {"total": 0, "done": 0, "in_progress": 0, "stages": []}
+
+        # Find current stage = first non-DONE stage in order
+        stages_sorted = sorted(agg.get("stages", []), key=lambda s: s.get("order", 0))
+        current_stage = None
+        overdue_count = 0
+        for s in stages_sorted:
+            # Overdue check inline
+            due = s.get("due_date")
+            is_od = False
+            if due and not s.get("actual_date") and not s.get("end_date") and s.get("status") != "DONE":
+                try:
+                    is_od = datetime.fromisoformat(due).date() < today
+                except Exception:
+                    is_od = False
+            if is_od:
+                overdue_count += 1
+            if current_stage is None and s.get("status") != "DONE":
+                current_stage = {
+                    "label": s.get("label"),
+                    "group": s.get("group"),
+                    "status": s.get("status"),
+                    "is_overdue": is_od,
+                }
+
+        total = agg["total"]
+        p["stages_done"] = agg["done"]
+        p["stages_total"] = total
+        p["stages_in_progress"] = agg["in_progress"]
+        p["stages_overdue"] = overdue_count
+        p["stages_progress_pct"] = round((agg["done"] / total) * 100) if total else 0
+        p["current_stage"] = current_stage
+        p["has_overdue"] = overdue_count > 0
+        out.append(p)
+
+    # Obras con retraso ARRIBA
+    out.sort(key=lambda x: (0 if x["has_overdue"] else 1, -x.get("stages_progress_pct", 0)))
+    return out
+
+
 class StagePatch(BaseModel):
     status: Optional[Literal["PENDING", "IN_PROGRESS", "DONE"]] = None
     due_date: Optional[str] = None
@@ -870,6 +991,7 @@ class StagePatch(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     notes: Optional[str] = None
+    meta: Optional[dict] = None  # type-specific structured fields (e.g. materiales_y_colores)
 
 
 @api.patch("/projects/{project_id}/stages/{stage_id}")
